@@ -9,12 +9,6 @@ from requests.auth import HTTPBasicAuth
 
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-#from databricks_cli.sdk.api_client import ApiClient
-#from databricks_cli.unity_catalog.api import UnityCatalogApi
-
 
 
 # bearer auth
