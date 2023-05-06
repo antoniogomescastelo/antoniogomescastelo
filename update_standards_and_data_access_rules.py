@@ -321,9 +321,4 @@ def run(argv=None):
     logger.debug("gor functions from policies")        
 
 
-    # write to table
-    functions_sdf=spark.createDataFrame(functions_df[['tag','function']].sort_values(by=['tag']))
-
-    functions_sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.tag_protection_methods")
-    
     return policies_df, functions_df 
