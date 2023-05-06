@@ -1,4 +1,4 @@
-# Databricks notebook source
+# Databricks notebook source 
 import sys
 import json 
 import logging
@@ -227,8 +227,7 @@ def get_policies_transformed(url=None, session=None, logger=None, policies=None,
 
 
 # get column mansking functions transformed
-def get_functions_masking_transformed(functions_df=None):
-    
+def get_functions_masking_transformed(functions_df=None):    
     functions_df['masking asset name'] = functions_df['masking asset name'].str.replace('[ .]', '', regex=True)
 
     functions_df['masking asset type name'] = functions_df['masking asset type name'].map({'Classification':'DataConcept', 'Data Category':'DataCategory'})
@@ -247,7 +246,7 @@ def get_functions_masking_transformed(functions_df=None):
 
 # get column masking functions processed
 def get_functions_transformed(policies_df=None):
-    functions_df = policies_df
+    functions_df = policies_df.copy(deep=True)
 
     functions_df.drop(['scope asset id', 'scope asset name', 'scope asset type', 'scope asset type name', 'masking asset id', 'masking asset type', 'grantAccess'], axis=1, inplace=True)
 
@@ -258,47 +257,6 @@ def get_functions_transformed(policies_df=None):
     functions_df.drop(['group name', 'masking asset type name', 'masking method'], axis=1, inplace=True)
     
     return functions_df
-
-
-
-
-# get bar plot
-def get_barplot(title=None, dataframe=None, groupby=None, x=None, y=None, hue=None):
-    sns.set(style='whitegrid')
-
-    fig=plt.figure(figsize=(16,8))
-
-    ax=fig.add_subplot(1,1,1); ax.tick_params(axis='x', rotation=90); ax.set_title(title)
-
-    result = dataframe.drop_duplicates().groupby(groupby).count().reset_index()
-
-    sns.barplot(data=result, x=x, y=y, hue=hue, palette='pastel')
-
-    if ax.get_legend() is not None: ax.get_legend().remove() 
-
-    ax.set(xlabel="", ylabel="")
-
-    sns.despine(left=True,bottom=True)
-
-    display(plt.show())
-
-
-
-# get scatter plot
-def get_scatter_plot(title=None, dataframe=None, groupby=None, x=None, y=None, hue=None, size=None):
-    sns.set(style='whitegrid')
-
-    fig=plt.figure(figsize=(16,8))
-
-    ax=fig.add_subplot(1,1,1); ax.tick_params(axis='x', rotation=90); ax.set_title(title)
-
-    result = dataframe.drop_duplicates().groupby(groupby).count().reset_index();
-
-    sns.scatterplot(data=result, x=x, y=y, hue=hue, size=size, sizes=(50, 500), marker="s", legend=False, palette='pastel')
-
-    sns.despine(left=True,bottom=True)
-
-    display(plt.show())
 
 
 
@@ -356,40 +314,6 @@ def run(argv=None):
 
     logger.debug("got policies transformed")        
     
-    # rules per group barplot
-    get_barplot(title='rules per group', dataframe=policies_df[['group name','scope asset id']], groupby='group name', x='group name', y='scope asset id')
-
-    logger.debug("got rules per group barplot")        
-
-    # rules per scope asset barplot
-    get_barplot(title='rules per scope asset', dataframe=policies_df[['scope asset name','scope asset id']], groupby='scope asset name', x='scope asset name', y='scope asset id')
-
-    logger.debug("got rules per scope asset barplot")        
-    
-    # rules per scope asset type barplot
-    get_barplot(title='rules per scope asset type', dataframe=policies_df[['scope asset type name','scope asset id']], groupby='scope asset type name', x='scope asset type name', y='scope asset id')
-
-    logger.debug("got rules per scope asset type barplot")        
-
-    # rules per masking asset barplot
-    get_barplot(title='rules per masking asset', dataframe=policies_df[['masking asset name','scope asset id']], groupby='masking asset name', x='masking asset name', y='scope asset id')
-
-    logger.debug("got rules per masking asset barplot")        
-
-    # rules per masking asset type barplot
-    get_barplot(title='rules per masking asset type', dataframe=policies_df[['masking asset type name','scope asset id']], groupby='masking asset type name', x='masking asset type name', y='scope asset id')
-
-    logger.debug("got rules per masking asset type barplot")        
-
-    # rules per masking method barplot
-    get_barplot(title='rules per masking method', dataframe=policies_df[['masking method','scope asset id']], groupby='masking method', x='masking method', y='scope asset id')
-
-    logger.debug("got rules per masking method barplot")        
-
-    # rules per masking method and masking asset scatter plot
-    get_scatter_plot(title='maskings per masking method', dataframe=policies_df[['group name','masking asset name','masking method']], groupby=['group name','masking asset name'], x='group name', y='masking asset name', hue='masking method', size='masking method')
-
-    logger.debug("got rules per masking method and masking asset scatter plot")        
 
     # get masking functions
     functions_df = get_functions_transformed(policies_df)
@@ -397,8 +321,7 @@ def run(argv=None):
     logger.debug("gor functions from policies")        
 
 
-
-
+    # write to table
     functions_sdf=spark.createDataFrame(functions_df[['tag','function']].sort_values(by=['tag']))
 
     functions_sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.tag_protection_methods")
