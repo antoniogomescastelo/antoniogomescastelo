@@ -341,6 +341,7 @@ def run(argv=None):
         '--logger',
         dest='logger',
         required=False,
+        type=int,
         help='logger logging level')
 
     args, options= parser.parse_known_args(argv)
