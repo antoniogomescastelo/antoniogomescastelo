@@ -277,7 +277,7 @@ def get_functions_statements(functions_df=None):
             
 
 # create column masking functions
-def create_masking_functions(host=None, token=None, warehouse=None, functions_df=None):
+def create_masking_functions(host=None, token=None, warehouse=None, logger=None, functions_df=None):
     session = requests.Session()
 
     session.auth = BearerAuth(token)
@@ -360,6 +360,6 @@ def run(argv=None):
     logger.debug("gor functions from policies")        
 
     # create masking functions
-    create_masking_functions(host=args.host, token=args.token, warehouse=args.warehouse, functions_df=functions_df)
+    create_masking_functions(host=args.host, token=args.token, warehouse=args.warehouse, logger=logger, functions_df=functions_df)
 
     return policies_df, functions_df 
