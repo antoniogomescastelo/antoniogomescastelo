@@ -277,6 +277,23 @@ def get_functions_statements(functions_df=None):
     return statements
             
 
+# create column masking functions
+def create_masking_functions(host=None, token=None, warehouse=None, functions_df=None)
+    session = requests.Session()
+
+    session.auth = BearerAuth(token)
+
+    for statement in get_functions_statements(functions_df):
+        payload = {
+            'warehouse_id': warehouse,
+            'statement': statement
+        }
+
+        response = session.post(host + '/api/2.0/sql/statements', json=payload)
+
+        logger.debug('response:\n%s', response.json())
+
+
 # run
 def run(argv=None):
     logger = get_logger(logging.INFO)
@@ -315,6 +332,12 @@ def run(argv=None):
         required=True,
         help='databricks workspace token')
 
+    parser.add_argument(
+        '--db-warehouse',
+        dest='warehouse',
+        required=True,
+        help='databricks warehouse id')
+
     args, options= parser.parse_known_args(argv)
         
     logger.debug("parsed known args")        
@@ -337,5 +360,7 @@ def run(argv=None):
 
     logger.debug("gor functions from policies")        
 
+    # create masking functions
+    create_masking_functions(host=args.host, token=args.token, warehouse=args.warehouse, functions_df=functions_df)
 
     return policies_df, functions_df 
