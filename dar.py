@@ -347,7 +347,7 @@ def run(argv=None):
     args, options= parser.parse_known_args(argv)
 
     if args.logger is not None:
-        logger = get_logger(args.logger)
+        logger = get_logger(int(args.logger))
 
     logger.debug("parsed known args")        
 
