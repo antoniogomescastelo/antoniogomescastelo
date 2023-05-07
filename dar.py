@@ -278,7 +278,7 @@ def get_functions_statements(functions_df=None):
             
 
 # create column masking functions
-def create_masking_functions(host=None, token=None, warehouse=None, functions_df=None)
+def create_masking_functions(host=None, token=None, warehouse=None, functions_df=None):
     session = requests.Session()
 
     session.auth = BearerAuth(token)
