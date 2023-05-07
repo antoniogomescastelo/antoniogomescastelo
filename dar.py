@@ -295,7 +295,7 @@ def create_masking_functions(host=None, token=None, warehouse=None, logger=None,
 
 # run
 def run(argv=None):
-    logger = get_logger().setLevel(logging.INFO)
+    logger = get_logger(logging.INFO)
 
     logger.debug("got logger")
 
@@ -339,14 +339,14 @@ def run(argv=None):
 
     parser.add_argument(
         '--logger',
-        dest='loglevel',
+        dest='logger',
         required=False,
         help='logger logging level')
 
     args, options= parser.parse_known_args(argv)
 
-    if loglevel is not None:
-        logger.setLevel(loglevel)
+    if args.logger is not None:
+        logger = get_logger(args.logger)
 
     logger.debug("parsed known args")        
 
