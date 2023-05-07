@@ -229,8 +229,6 @@ def get_functions_masking_transformed(functions_df=None):
     functions_df = functions_df.assign(tag=lambda x: x['masking asset type name'] + ':' + x['masking asset name'])
 
     functions_df = functions_df.assign(function=lambda x: x['masking asset type name'] + '_' + x['masking asset name'])
-
-    #functions_df = functions_df.assign(condition=lambda x: 'WHEN IS_ACCOUNT_GROUP_MEMBER(\'' + x['group name'] + '\') THEN ' + x['masking method'] + '(' + x['masking asset name'] + ')')
     
     functions_df.rename(columns={"masking asset name": "parameter"}, inplace=True)
 
@@ -248,7 +246,7 @@ def get_functions_transformed(policies_df=None):
 
     functions_df = get_functions_masking_transformed(functions_df)
 
-    functions_df.drop(['group name', 'masking asset type name', 'masking method'], axis=1, inplace=True)
+    functions_df.drop(['masking asset type name'], axis=1, inplace=True)
     
     return functions_df
 
