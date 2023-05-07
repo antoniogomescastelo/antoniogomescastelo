@@ -295,7 +295,7 @@ def create_masking_functions(host=None, token=None, warehouse=None, logger=None,
 
 # run
 def run(argv=None):
-    logger = get_logger(logging.INFO)
+    logger = get_logger().setLevel(logging.INFO)
 
     logger.debug("got logger")
 
@@ -337,9 +337,19 @@ def run(argv=None):
         required=True,
         help='databricks warehouse id')
 
+    parser.add_argument(
+        '--logger',
+        dest='loglevel',
+        required=False,
+        help='logger logging level')
+
     args, options= parser.parse_known_args(argv)
-        
+
+    if loglevel is not None:
+        logger.setLevel(loglevel)
+
     logger.debug("parsed known args")        
+
     names= {}
 
     session = get_session(args)
