@@ -267,6 +267,9 @@ def get_functions_statement(functions_df=None):
 
         statement = '{}\nWHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN main.sbi_template_unitycatalog.protect(value, \'{}\')'.format(statement, row['group name'], row['masking method'])
 
+    if len(statement):
+        statement = '{}\nELSE value\nEND;\n'.format(statement)
+
     return statement
             
 
