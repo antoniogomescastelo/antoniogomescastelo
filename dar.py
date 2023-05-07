@@ -251,6 +251,24 @@ def get_functions_transformed(policies_df=None):
     return functions_df
 
 
+# get column masking functions statement
+def get_functions_statement(functions_df=None):
+    last = None
+    statement = ''
+
+    for index, row in functions_df.sort_values(by=['function']).iterrows():
+        if row['function'] != last:
+            if len(statement):
+                statement = '{}\nELSE value\nEND;\n'.format(statement)
+
+            statement = '{}\nCREATE OR REPLACE FUNCTION main.sbi_template_unitycatalog.{}(value STRING, method STRING)\nRETURNS STRING\nRETURN CASE'.format(statement, row['function'])
+            
+            last = row['function']
+
+        statement = '{}\nWHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN main.sbi_template_unitycatalog.protect(value, \'{}\')'.format(statement, row['group name'], row['masking method'])
+
+    return statement
+            
 
 # run
 def run(argv=None):
