@@ -288,7 +288,7 @@ def drop_masking_functions(host=None, token=None, warehouse=None, logger=None, f
 
                         payload = {
                             'warehouse_id': warehouse,
-                            'statement': 'ALTER TABLE {} MODIFY COLUMN {} DROP MASK;'.format(table, column)
+                            'statement': 'ALTER TABLE {} ALTER COLUMN {} DROP MASK;'.format(table, column)
                         }
 
                         response = session.post(host + '/api/2.0/sql/statements', json=payload)
