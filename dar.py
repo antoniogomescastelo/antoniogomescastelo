@@ -250,8 +250,70 @@ def get_functions_transformed(policies_df=None):
     return functions_df
 
 
-# get column masking functions statements
-def get_functions_statements(functions_df=None):
+
+# drop column masking functions
+def drop_masking_functions(host=None, token=None, warehouse=None, logger=None, functions_df=None):
+    session = requests.Session()
+
+    session.auth = BearerAuth(token)
+
+    payload = {
+        'warehouse_id': warehouse,
+        'statement': "SHOW USER FUNCTIONS IN sbi_template_unitycatalog;" 
+    }
+
+    response = session.post(host + '/api/2.0/sql/statements', json=payload)
+
+    try:    
+        for f in response.json()['result']['data_array']: 
+            fname = f[0].split('.')[-1].lower()
+
+            found = True if len(functions_df.loc[functions_df['function'].str.lower() == fname]) else False
+            
+            if not found and fname != 'protect': 
+                payload = {
+                    'warehouse_id': warehouse,
+                    'statement': 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM main.sbi_template_unitycatalog.tag_assignments a, main.sbi_template_unitycatalog.tag_protection_methods b WHERE lower(b.function) = \'{}\' AND lower(a.tag) = lower(b.tag)'.format(fname)
+                }
+
+                response = session.post(host + '/api/2.0/sql/statements', json=payload)
+
+                logger.debug('response:\n%s', response.json())
+
+                try:
+                    for c in response.json()['result']['data_array']: 
+                        table = ".".join(c[:3])
+
+                        column = c[3]
+
+                        payload = {
+                            'warehouse_id': warehouse,
+                            'statement': 'ALTER TABLE {} MODIFY COLUMN {} DROP MASK;'.format(table, column)
+                        }
+
+                        response = session.post(host + '/api/2.0/sql/statements', json=payload)
+
+                        logger.debug('response:\n%s', response.json())
+
+                    payload = {
+                        'warehouse_id': warehouse,
+                        'statement': 'DROP FUNCTION {};'.format(f[0])
+                    }
+
+                    response = session.post(host + '/api/2.0/sql/statements', json=payload)
+
+                    logger.debug('response:\n%s', response.json())
+
+                except Exception as e:
+                    logger.debug('ignoring: %s', e)
+            
+    except Exception as e:
+        logger.debug('ignoring: %s', e)
+
+
+
+# get column masking functions commands
+def get_create_functions_commands(functions_df=None):
     statement = ''
     statements = []
 
@@ -274,15 +336,16 @@ def get_functions_statements(functions_df=None):
         statements.append(statement)
 
     return statements
-            
 
-# create column masking functions
-def create_masking_functions(host=None, token=None, warehouse=None, logger=None, functions_df=None):
+
+
+# update column masking functions
+def update_masking_functions(host=None, token=None, warehouse=None, logger=None, functions_df=None):
     session = requests.Session()
 
     session.auth = BearerAuth(token)
 
-    for statement in get_functions_statements(functions_df):
+    for statement in get_create_functions_commands(functions_df):
         payload = {
             'warehouse_id': warehouse,
             'statement': statement
@@ -370,7 +433,10 @@ def run(argv=None):
 
     logger.debug("gor functions from policies")        
 
-    # create masking functions
-    create_masking_functions(host=args.host, token=args.token, warehouse=args.warehouse, logger=logger, functions_df=functions_df)
+    # drop masking functions
+    drop_masking_functions(host=args.host, token=args.token, warehouse=args.warehouse, logger=logger, functions_df=functions_df)
+
+    # update masking functions
+    update_masking_functions(host=args.host, token=args.token, warehouse=args.warehouse, logger=logger, functions_df=functions_df)
 
     return policies_df, functions_df 
