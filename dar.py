@@ -295,6 +295,10 @@ def drop_masking_functions(host=None, token=None, warehouse=None, logger=None, f
 
                         logger.debug('response:\n%s', response.json())
 
+                except Exception as e:
+                    logger.debug('ignoring: %s', e)
+
+                try:
                     payload = {
                         'warehouse_id': warehouse,
                         'statement': 'DROP FUNCTION {};'.format(f[0])
