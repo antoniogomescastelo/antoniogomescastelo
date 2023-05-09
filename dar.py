@@ -55,7 +55,7 @@ def get_asset_name(url=None, session=None, logger=None, uuid=None, names=None):
         return names[uuid]
 
     except Exception as e:
-        logger.debug('ignoring: %s', e)
+        pass
 
     try:
         response = session.get(url + '/rest/2.0/assets/' + uuid)
@@ -65,7 +65,7 @@ def get_asset_name(url=None, session=None, logger=None, uuid=None, names=None):
         return response.json()['name']
 
     except Exception as e:
-        logger.debug('ignoring: %s', e)
+        pass
 
         # if classification
         try:
@@ -78,8 +78,6 @@ def get_asset_name(url=None, session=None, logger=None, uuid=None, names=None):
             return response.json()['name']
 
         except Exception as e:
-            logger.debug('ignoring: %s', e)
-
             return None
 
 
@@ -90,7 +88,7 @@ def get_assettype_name(url=None, session=None, logger=None, type_uuid=None, asse
         return names[type_uuid]
 
     except Exception as e:
-        logger.debug('ignoring: %s', e)
+        pass
 
     try:
         response = session.get(url + '/rest/2.0/assetTypes/'+type_uuid)
@@ -102,7 +100,7 @@ def get_assettype_name(url=None, session=None, logger=None, type_uuid=None, asse
         return response.json()['name']
 
     except Exception as e:
-        logger.debug('ignoring: %s', e)
+        pass
         
         # if classification
         try:
@@ -115,8 +113,6 @@ def get_assettype_name(url=None, session=None, logger=None, type_uuid=None, asse
             return response.json()['resourceType']
 
         except Exception as e:
-            logger.debug('ignoring: %s', e)
-
             return None
 
 
@@ -135,7 +131,7 @@ def get_policies(url=None, session=None, logger=None):
         policies = [dict(filter(lambda i: (i[0] in allItems), policy.items())) for policy in response.json()['results']]
 
     except Exception as e:
-        logger.debug('ignoring: %s', e)
+        pass
 
     return policies
 
@@ -219,7 +215,7 @@ def get_policies_transformed(url=None, session=None, logger=None, policies=None,
 
 
 
-# get column mansking functions transformed
+# get column masking functions transformed
 def get_functions_masking_transformed(functions_df=None):    
     functions_df['masking asset name'] = functions_df['masking asset name'].str.replace('[ .]', '', regex=True)
 
@@ -253,18 +249,20 @@ def get_functions_transformed(policies_df=None):
 
 # drop column masking functions
 def drop_masking_functions(host=None, token=None, warehouse=None, logger=None, functions_df=None):
-    session = requests.Session()
-
-    session.auth = BearerAuth(token)
-
-    payload = {
-        'warehouse_id': warehouse,
-        'statement': "SHOW USER FUNCTIONS IN sbi_template_unitycatalog;" 
-    }
-
-    response = session.post(host + '/api/2.0/sql/statements', json=payload)
-
     try:    
+        session = requests.Session()
+
+        session.auth = BearerAuth(token)
+
+        payload = {
+            'warehouse_id': warehouse,
+            'statement': "SHOW USER FUNCTIONS IN sbi_template_unitycatalog;" 
+        }
+
+        logger.debug('payload:\n%s', payload)
+
+        response = session.post(host + '/api/2.0/sql/statements', json=payload)
+
         for f in response.json()['result']['data_array']: 
             fname = f[0].split('.')[-1].lower()
 
@@ -275,6 +273,8 @@ def drop_masking_functions(host=None, token=None, warehouse=None, logger=None, f
                     'warehouse_id': warehouse,
                     'statement': 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM main.sbi_template_unitycatalog.tag_assignments a, main.sbi_template_unitycatalog.tag_protection_methods b WHERE lower(b.function) = \'{}\' AND lower(a.tag) = lower(b.tag)'.format(fname)
                 }
+
+                logger.debug('payload:\n%s', payload)
 
                 response = session.post(host + '/api/2.0/sql/statements', json=payload)
 
@@ -291,12 +291,14 @@ def drop_masking_functions(host=None, token=None, warehouse=None, logger=None, f
                             'statement': 'ALTER TABLE {} ALTER COLUMN {} DROP MASK;'.format(table, column)
                         }
 
+                        logger.debug('payload:\n%s', payload)
+
                         response = session.post(host + '/api/2.0/sql/statements', json=payload)
 
                         logger.debug('response:\n%s', response.json())
 
                 except Exception as e:
-                    logger.debug('ignoring: %s', e)
+                    pass
 
                 try:
                     payload = {
@@ -304,15 +306,107 @@ def drop_masking_functions(host=None, token=None, warehouse=None, logger=None, f
                         'statement': 'DROP FUNCTION {};'.format(f[0])
                     }
 
+                    logger.debug('payload:\n%s', payload)
+
                     response = session.post(host + '/api/2.0/sql/statements', json=payload)
 
                     logger.debug('response:\n%s', response.json())
 
                 except Exception as e:
-                    logger.debug('ignoring: %s', e)
+                    pass
             
     except Exception as e:
-        logger.debug('ignoring: %s', e)
+        pass
+
+
+
+# set column masking functions
+def set_masking_functions(host=None, token=None, warehouse=None, logger=None, functions_df=None):
+    try:
+        session = requests.Session()
+
+        session.auth = BearerAuth(token)
+
+        payload = {
+            'warehouse_id': warehouse,
+            'statement': "SHOW USER FUNCTIONS IN sbi_template_unitycatalog;" 
+        }
+
+        logger.debug('payload:\n%s', payload)
+
+        response = session.post(host + '/api/2.0/sql/statements', json=payload)
+
+        functions = [f[0].split('.')[-1].lower() for f in response.json()['result']['data_array']]
+
+        for index, row in functions_df.sort_values(by=['function']).iterrows():
+            fname = row['function'].lower()
+
+            found = True if fname in functions else False
+
+            if not found and fname != 'protect': 
+                payload = {
+                    'warehouse_id': warehouse,
+                    'statement': 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM main.sbi_template_unitycatalog.tag_assignments a, main.sbi_template_unitycatalog.tag_protection_methods b WHERE lower(b.function) = \'{}\' AND lower(a.tag) = lower(b.tag)'.format(fname)
+                }
+
+                logger.debug('payload:\n%s', payload)
+
+                columns = session.post(host + '/api/2.0/sql/statements', json=payload)
+
+                logger.debug('response:\n%s', columns.json())
+
+                try:
+                    payload = {
+                        'warehouse_id': warehouse,
+                        'statement': 'CREATE OR REPLACE FUNCTION main.sbi_template_unitycatalog.{}(value STRING) RETURNS STRING RETURN value;'.format(row['function'])
+                    }
+
+                    logger.debug('payload:\n%s', payload)
+
+                    response = session.post(host + '/api/2.0/sql/statements', json=payload)
+
+                    logger.debug('response:\n%s', response.json())
+
+                except Exception as e:
+                    pass
+
+                try:
+                    for c in columns.json()['result']['data_array']: 
+                        table = ".".join(c[:3])
+
+                        column = c[3]
+
+                        payload = {
+                            'warehouse_id': warehouse,
+                            'statement': 'ALTER TABLE {} ALTER COLUMN {} SET MASK main.sbi_template_unitycatalog.{};'.format(table, column, row['function'])
+                        }
+
+                        logger.debug(payload)
+
+                        response = session.post(host + '/api/2.0/sql/statements', json=payload)
+
+                        logger.debug('response:\n%s', response.json())
+
+                except Exception as e:
+                    pass
+
+                try:
+                    payload = {
+                        'warehouse_id': warehouse,
+                        'statement': 'DROP FUNCTION main.sbi_template_unitycatalog.{};'.format(row['function'])
+                    }
+
+                    logger.debug('payload:\n%s', payload)
+
+                    response = session.post(host + '/api/2.0/sql/statements', json=payload)
+
+                    logger.debug('response:\n%s', response.json())
+
+                except Exception as e:
+                    pass
+
+    except Exception as e:
+        pass
 
 
 
@@ -435,12 +529,21 @@ def run(argv=None):
     # get masking functions
     functions_df = get_functions_transformed(policies_df)
 
-    logger.debug("gor functions from policies")        
+    logger.debug("got functions from policies")        
 
     # drop masking functions
     drop_masking_functions(host=args.host, token=args.token, warehouse=args.warehouse, logger=logger, functions_df=functions_df)
 
+    logger.debug("dropped column masking functions")        
+
+    # set masking functions
+    set_masking_functions(host=args.host, token=args.token, warehouse=args.warehouse, logger=logger, functions_df=functions_df)
+
+    logger.debug("added column masking functions")        
+
     # update masking functions
     update_masking_functions(host=args.host, token=args.token, warehouse=args.warehouse, logger=logger, functions_df=functions_df)
+
+    logger.debug("updated column masking functions")        
 
     return policies_df, functions_df 
