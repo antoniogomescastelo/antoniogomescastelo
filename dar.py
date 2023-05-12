@@ -225,7 +225,7 @@ def get_functions_masking_transformed(functions_df=None):
 
     functions_df = functions_df.assign(function=lambda x: x['masking asset type name'] + '_' + x['masking asset name'])
     
-    functions_df.rename(columns={"masking asset name": "parameter"}, inplace=True)
+    functions_df.drop(['masking asset name'], axis=1, inplace=True)
 
     return functions_df
 
