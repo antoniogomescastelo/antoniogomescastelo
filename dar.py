@@ -326,20 +326,26 @@ def get_create_functions_commands(args=None, functions_df=None):
     for index, row in functions_df.sort_values(by=['function']).iterrows():
         if row['function'] != lastFunction:
             if len(statement):
-                statement = '{} ELSE value END; '.format(statement)
+                statements.append('DROP FUNCTION {};'.format(lastFunction))
+
+                statement = '{} ELSE \'[REDACTED]\' END; '.format(statement)
+                #statement = '{} ELSE {}.protect(value, \'DEFAULT_MASKING\') END; '.format(statement, schemaName)
 
                 statements.append(statement)
 
                 statement = ''
 
-            statement = 'CREATE OR REPLACE FUNCTION {}(value STRING, method STRING) RETURNS STRING RETURN CASE'.format(row['function'])
+            statement = 'CREATE OR REPLACE FUNCTION {}(value STRING) RETURNS STRING RETURN CASE'.format(row['function'])
             
             lastFunction = row['function']
 
         statement = '{} WHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN {}.protect(value, \'{}\')'.format(statement, row['group name'], schemaName,row['masking method'])
 
     if len(statement):
-        statement = '{} ELSE value END; '.format(statement)
+        statements.append('DROP FUNCTION {};'.format(lastFunction))
+
+        statement = '{} ELSE \'[REDACTED]\' END; '.format(statement)
+        #statement = '{} ELSE {}.protect(value, \'DEFAULT_MASKING\') END; '.format(statement, schemaName)
         
         statements.append(statement)
 
@@ -366,7 +372,37 @@ def update_masking_functions(args=None, functions_df=None):
 
 
 def apply_masking_functions(args=None, functions_df=None):
-    args.logger.debug('PENDING')    
+    schemaName = args.catalog+'.'+args.schema
+    
+    try:    
+        statement = 'SELECT DISTINCT a.*, b.function FROM {}.tag_assignments a, {}.tag_protection_methods b WHERE lower(b.tag) = lower(a.tag) ORDER BY b.function DESC;'.format(schemaName, schemaName) 
+
+        args.logger.debug('statement:\n%s', statement)
+        
+        results = sqlContext.sql(statement).toPandas()  
+
+        args.logger.debug('response:\n%s', results.shape)
+
+        for index, row in results.iterrows():
+            try:
+                tableName = ".".join(row[:3])
+
+                columnName = row['column']
+
+                statement = 'ALTER TABLE {} ALTER COLUMN {} SET MASK {};'.format(tableName, columnName, row['function'])
+
+                args.logger.debug('statement:\n%s', statement)
+        
+                results = sqlContext.sql(statement).toPandas()
+
+                args.logger.debug('response:\n%s', results.shape)
+
+            except Exception as e:
+                continue
+
+    except Exception as e:
+        args.logger.debug('response:\nFAILED')
+        pass
 
 
 
@@ -492,4 +528,3 @@ def run(argv=None):
     args.logger.info("done")     
     
     return policies_df, functions_df 
-    
