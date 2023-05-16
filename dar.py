@@ -5,6 +5,7 @@ import argparse
 
 import requests
 from requests.auth import HTTPBasicAuth
+from databricks.sdk.runtime import *
 
 import numpy as np
 import pandas as pd
