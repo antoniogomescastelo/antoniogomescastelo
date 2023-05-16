@@ -26,15 +26,15 @@ class BearerAuth(requests.auth.AuthBase):
 def get_logger(level=logging.INFO):
     logger = logging.getLogger()
     
-    logger.setLevel(level)
+    formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s: %(message)s ')
 
     handler = logging.StreamHandler(sys.stderr)
-
-    formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s: %(message)s ')
 
     handler.setFormatter(formatter)
 
     logger.handlers = [handler]
+
+    logger.setLevel(level)
 
     return logger
 
@@ -54,6 +54,7 @@ def get_session(args=None):
 def get_asset_name(args=None, asset_uuid=None):
     try:
         return args.names[asset_uuid]
+        
     except Exception as e:
         pass
 
@@ -177,7 +178,7 @@ def get_policies_dataframe_maskings(args=None, policies_df=None):
 
     policies_df['masking method'] = policies_df.maskings.apply(lambda x:  x.get('method'))
 
-    # copy from scope asset if standard
+    # copy from scope asset if null
     policies_df['masking asset id'] = np.where(policies_df['masking asset id'].isnull(), policies_df['scope asset id'], policies_df['masking asset id']) 
 
     policies_df['masking asset type'] = np.where(policies_df['masking asset type'].isnull(), policies_df['scope asset type'], policies_df['masking asset type']) 
@@ -249,23 +250,12 @@ def drop_masking_functions(args=None, functions_df=None):
     schemaName = args.catalog+'.'+args.schema
 
     try:    
-        session = requests.Session()
+        statement = 'SHOW USER FUNCTIONS IN {};'.format(args.schema) 
 
-        session.auth = BearerAuth(args.token)
-
-        payload = {
-            'warehouse_id': args.warehouse,
-            'statement': "SHOW USER FUNCTIONS IN sbi_template_unitycatalog;" 
-        }
-
-        args.logger.debug('payload:\n%s', payload)
-
-        response = session.post(args.host + '/api/2.0/sql/statements', json=payload)
-
-        args.logger.debug('response:\n%s', response.json())
-
-        before_df = pd.DataFrame(response.json()['result']['data_array'], columns=['function'])
-
+        args.logger.debug('statement:\n%s', statement)
+        
+        before_df = sqlContext.sql(statement).toPandas()  
+        
         tobedeleted_df = before_df.merge(pd.DataFrame(functions_df['function'].str.lower()), how='left', indicator=True)
         
         tobedeleted_df = tobedeleted_df[tobedeleted_df['_merge'] == 'left_only']
@@ -277,51 +267,43 @@ def drop_masking_functions(args=None, functions_df=None):
                 continue
 
             try:
-                payload = {
-                    'warehouse_id': args.warehouse,
-                    'statement': 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM {}.tag_assignments a, {}.tag_protection_methods b WHERE lower(b.function) = \'{}\' AND lower(a.tag) = lower(b.tag)'.format(schemaName, schemaName, row[0])
-                }
+                statement = 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM {}.tag_assignments a, {}.tag_protection_methods b WHERE lower(b.function) = \'{}\' AND lower(a.tag) = lower(b.tag)'.format(schemaName, schemaName, row[0])
 
-                args.logger.debug('payload:\n%s', payload)
+                args.logger.debug('statement:\n%s', statement)
+                
+                results = sqlContext.sql(statement).toPandas()  
 
-                response = session.post(args.host + '/api/2.0/sql/statements', json=payload)
+                args.logger.debug('response:\n%s', results.shape)
 
-                args.logger.debug('response:\n%s', response.json())
-
-                for c in response.json()['result']['data_array']: 
+                for i, r in results.iterrows():
                     try:
-                        tableName = ".".join(c[:3])
+                        tableName = ".".join(r[:3])
 
-                        columnName = c[3]
+                        columnName = r[3]
 
-                        payload = {
-                            'warehouse_id': args.warehouse,
-                            'statement': 'ALTER TABLE {} ALTER COLUMN {} DROP MASK;'.format(tableName, columnName)
-                        }
+                        statement = 'ALTER TABLE {} ALTER COLUMN {} DROP MASK;'.format(tableName, columnName)
 
-                        args.logger.debug('payload:\n%s', payload)
+                        args.logger.debug('statement:\n%s', statement)
+                
+                        results = sqlContext.sql(statement).toPandas()
 
-                        response = session.post(args.host + '/api/2.0/sql/statements', json=payload)
-
-                        args.logger.debug('response:\n%s', response.json())
+                        args.logger.debug('response:\n%s', results.shape)
 
                     except Exception as e:
                         continue
 
-                try:
-                    payload = {
-                        'warehouse_id': args.warehouse,
-                        'statement': 'DROP FUNCTION {};'.format(row[0])
-                    }
+                if (results.shape[0]>0):
+                    try:
+                        statement = 'DROP FUNCTION {};'.format(row[0])
 
-                    args.logger.debug('payload:\n%s', payload)
+                        args.logger.debug('statement:\n%s', statement)
+                
+                        results = sqlContext.sql(statement).toPandas()
 
-                    response = session.post(args.host + '/api/2.0/sql/statements', json=payload)
+                        args.logger.debug('response:\n%s', results.shape)
 
-                    args.logger.debug('response:\n%s', response.json())
-
-                except Exception as e:
-                    pass
+                    except Exception as e:
+                        pass
 
             except Exception as e:
                 pass
@@ -333,38 +315,33 @@ def drop_masking_functions(args=None, functions_df=None):
 
 # get create or replace masking functions statement
 def get_create_functions_commands(args=None, functions_df=None):
-    schemaName = args.catalog + '.' + args.schema
-
     statement = ''
 
-    statements = [] #['TRUNCATE TABLE {}.tag_protection_methods;'.format(schemaName)]
+    statements = []
 
-    lastTag = None
     lastFunction = None
+
+    schemaName = args.catalog + '.' + args.schema
+
     for index, row in functions_df.sort_values(by=['function']).iterrows():
         if row['function'] != lastFunction:
             if len(statement):
-                statement = '{}\nELSE value\nEND;\n'.format(statement)
+                statement = '{} ELSE value END; '.format(statement)
 
                 statements.append(statement)
 
-                #statements.append('INSERT INTO {}.tag_protection_methods VALUES (\'{}\', \'{}\');'.format(schemaName, lastTag, lastFunction))
-
                 statement = ''
 
-            statement = '{}\nCREATE OR REPLACE FUNCTION {}(value STRING, method STRING)\nRETURNS STRING\nRETURN CASE'.format(statement, row['function'])
+            statement = 'CREATE OR REPLACE FUNCTION {}(value STRING, method STRING) RETURNS STRING RETURN CASE'.format(row['function'])
             
-            lastTag = row['tag']
             lastFunction = row['function']
 
-        statement = '{}\nWHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN {}.protect(value, \'{}\')'.format(statement, row['group name'], schemaName,row['masking method'])
+        statement = '{} WHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN {}.protect(value, \'{}\')'.format(statement, row['group name'], schemaName,row['masking method'])
 
     if len(statement):
-        statement = '{}\nELSE value\nEND;\n'.format(statement)
+        statement = '{} ELSE value END; '.format(statement)
         
         statements.append(statement)
-
-        #statements.append('INSERT INTO {}.tag_protection_methods VALUES (\'{}\', \'{}\');'.format(schemaName, lastTag, lastFunction))
 
         statement = ''
 
@@ -374,21 +351,22 @@ def get_create_functions_commands(args=None, functions_df=None):
 
 # create or replace column masking functions
 def update_masking_functions(args=None, functions_df=None):
-    session = requests.Session()
-
-    session.auth = BearerAuth(args.token)
-
     for statement in get_create_functions_commands(args, functions_df):
-        payload = {
-            'warehouse_id': args.warehouse,
-            'statement': statement
-        }
+        try:
+            args.logger.debug('statement:\n%s', statement)
+            
+            results = sqlContext.sql(statement).toPandas()
+            
+            args.logger.debug('response:\n%s', results.shape)
+        
+        except Exception as e:
+            args.logger.debug('response:\nFAILED')
+            pass
 
-        args.logger.debug('payload:\n%s', payload)
 
-        response = session.post(args.host + '/api/2.0/sql/statements', json=payload)
 
-        args.logger.debug('response:\n%s', response.json())
+def apply_masking_functions(args=None, functions_df=None):
+    args.logger.debug('PENDING')    
 
 
 
@@ -472,15 +450,20 @@ def run(argv=None):
 
     args.logger.info("got policies dataframe")        
 
+    # use main catalog 
+    schemaName = args.catalog + '.' + args.schema
+
+    sqlContext.sql("use catalog {};".format(args.catalog))  
+
     # get masking functions
     functions_df = get_functions_dataframe(args=args, policies_df=policies_df)
 
     args.logger.info("got mask functions from policies")        
-    
+
     # drop old masking functions
     drop_masking_functions(args=args, functions_df=functions_df)
 
-    args.logger.info("dropped column masking functions")        
+    args.logger.info("dropped old column masking functions")        
 
     # update all masking functions
     update_masking_functions(args=args, functions_df=functions_df)
@@ -492,20 +475,21 @@ def run(argv=None):
    
     functions_sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.tag_protection_methods")
 
-    args.logger.info("persist column masking functions")        
+    args.logger.info("saved column masking functions")        
 
     # apply all masking functions
-    #apply_masking_functions(args=args, functions_df=functions_df)
+    apply_masking_functions(args=args, functions_df=functions_df)
 
-    #args.logger.debug("applied column masking functions")        
+    args.logger.info("set column masking functions")        
 
-    # drop tag assignments dupps
-    assignments_sdf = sqlContext.sql("SELECT DISTINCT * FROM main.sbi_template_unitycatalog.tag_assignments") 
+    # drop tag assignments dups
+    assignments_sdf = sqlContext.sql("SELECT DISTINCT * FROM {}.tag_assignments".format(schemaName)) 
 
     assignments_sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.tag_assignments")
 
-    args.logger.info("dropped duplicate tag assignments")        
+    args.logger.info("drop duplicate assignments")        
 
     args.logger.info("done")     
     
     return policies_df, functions_df 
+    
