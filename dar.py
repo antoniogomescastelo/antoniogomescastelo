@@ -24,7 +24,7 @@ class BearerAuth(requests.auth.AuthBase):
 # get logger
 def get_logger(level=logging.INFO):
     logger = logging.getLogger()
-
+    
     logger.setLevel(level)
 
     handler = logging.StreamHandler(sys.stderr)
@@ -50,30 +50,29 @@ def get_session(args=None):
 
 
 # get asset name for uuid
-def get_asset_name(url=None, session=None, logger=None, uuid=None, names=None):
+def get_asset_name(args=None, asset_uuid=None):
     try:
-        return names[uuid]
-
+        return args.names[asset_uuid]
     except Exception as e:
         pass
 
     try:
-        response = session.get(url + '/rest/2.0/assets/' + uuid)
+        response = args.session.get(args.url + '/rest/2.0/assets/' + asset_uuid)
 
-        logger.debug('response:\n%s', json.dumps(response.json(), indent=2))
+        args.logger.debug('response:\n%s', json.dumps(response.json(), indent=2))
+
+        args.names[asset_uuid] = response.json()['name']
 
         return response.json()['name']
 
     except Exception as e:
-        pass
-
-        # if classification
+        # if classification instead
         try:
-            response = session.get(url + '/rest/catalog/1.0/dataClassification/classifications/' + uuid)
+            response = args.session.get(args.url + '/rest/catalog/1.0/dataClassification/classifications/' + asset_uuid)
 
-            logger.debug('response:\n%s', json.dumps(response.json(), indent=2))
+            args.logger.debug('response:\n%s', json.dumps(response.json(), indent=2))
 
-            names[uuid] = response.json()['name']
+            args.names[asset_uuid] = response.json()['name']
 
             return response.json()['name']
 
@@ -83,32 +82,30 @@ def get_asset_name(url=None, session=None, logger=None, uuid=None, names=None):
 
 
 # get asset type name for uuid
-def get_assettype_name(url=None, session=None, logger=None, type_uuid=None, asset_uuid=None, names=None):
+def get_assettype_name(args=None, type_uuid=None, asset_uuid=None):
     try:
-        return names[type_uuid]
+        return args.names[type_uuid]
 
     except Exception as e:
         pass
 
     try:
-        response = session.get(url + '/rest/2.0/assetTypes/'+type_uuid)
+        response = args.session.get(args.url + '/rest/2.0/assetTypes/'+type_uuid)
 
-        logger.debug('response:\n%s', json.dumps(response.json(), indent=2))
+        args.logger.debug('response:\n%s', json.dumps(response.json(), indent=2))
 
-        names[type_uuid] = response.json()['name']
+        args.names[type_uuid] = response.json()['name']
 
         return response.json()['name']
 
     except Exception as e:
-        pass
-        
-        # if classification
+        # if classification instead
         try:
-            response = session.get(url + '/rest/catalog/1.0/dataClassification/classifications/' + asset_uuid)
+            response = args.session.get(args.url + '/rest/catalog/1.0/dataClassification/classifications/' + asset_uuid)
 
-            logger.debug('response:\n%s', json.dumps(response.json(), indent=2))
+            args.logger.debug('response:\n%s', json.dumps(response.json(), indent=2))
 
-            names[type_uuid] = response.json()['resourceType']
+            args.names[type_uuid] = response.json()['resourceType']
 
             return response.json()['resourceType']
 
@@ -118,15 +115,15 @@ def get_assettype_name(url=None, session=None, logger=None, type_uuid=None, asse
 
 
 # get protect standards and acccess rules
-def get_policies(url=None, session=None, logger=None):
+def get_policies(args=None):
     policies = {}
 
     allItems = ['type', 'id', 'name', 'groups', 'asset', 'assets', 'masking', 'maskings', 'grantAccess']
 
     try:
-        response = session.get(url + '/rest/protect/v1/policies')
+        response = args.session.get(args.url + '/rest/protect/v1/policies')
 
-        logger.debug('response:\n%s', json.dumps(response.json(), indent=2))
+        args.logger.debug('response:\n%s', json.dumps(response.json(), indent=2))
 
         policies = [dict(filter(lambda i: (i[0] in allItems), policy.items())) for policy in response.json()['results']]
 
@@ -137,9 +134,8 @@ def get_policies(url=None, session=None, logger=None):
 
 
 
-# get group names, drop dict
-def get_policies_groups_transformed(url=None, session=None, logger=None, policies_df=None, names=None):
-    
+# get group names from protect policy groups
+def get_policies_dataframe_groups(args, policies_df=None):
     policies_df['group name'] = policies_df.groups.apply(lambda x: x.get('name'))
 
     policies_df.drop(['groups'], axis=1, inplace=True)
@@ -148,18 +144,17 @@ def get_policies_groups_transformed(url=None, session=None, logger=None, policie
 
 
 
-# get scope assets, drop dict
-def get_policies_assets_transformed(url=None, session=None, logger=None, policies_df=None, names=None):
-    
+# get assets details from protect policy scope assets
+def get_policies_dataframe_assets(args=None, policies_df=None):
     policies_df['assets'] = np.where(policies_df.assets.isnull(), policies_df['asset'], policies_df['assets'])
 
     policies_df['scope asset id'] = policies_df.assets.apply(lambda x: x.get('id'))
 
     policies_df['scope asset type'] = policies_df.assets.apply(lambda x: x.get('type'))
 
-    policies_df['scope asset name'] = policies_df.assets.apply(lambda x: get_asset_name(url, session, logger, x.get('id'), names))
+    policies_df['scope asset name'] = policies_df.assets.apply(lambda x: get_asset_name(args, x.get('id')))
 
-    policies_df['scope asset type name'] = policies_df.assets.apply(lambda x: get_assettype_name(url, session, logger, x.get('type'), x.get('id'), names))
+    policies_df['scope asset type name'] = policies_df.assets.apply(lambda x: get_assettype_name(args, x.get('type'), x.get('id')))
 
     policies_df.drop(['asset', 'assets'], axis=1, inplace=True)
 
@@ -167,22 +162,21 @@ def get_policies_assets_transformed(url=None, session=None, logger=None, policie
 
 
 
-# get masking assets, drop dict
-def get_policies_maskings_transformed(url=None, session=None, logger=None, policies_df=None, names=None):
-        
+# get masking asset details from protect policy maskings
+def get_policies_dataframe_maskings(args=None, policies_df=None):
     policies_df['maskings'] = np.where(policies_df.maskings.isnull(), policies_df['masking'], policies_df['maskings']) 
 
     policies_df['masking asset id'] = policies_df.maskings.apply(lambda x: x.get('id'))
 
     policies_df['masking asset type'] = policies_df.maskings.apply(lambda x: x.get('type'))
 
-    policies_df['masking asset name'] = policies_df.maskings.apply(lambda x: get_asset_name(url, session, logger, x.get('id'), names))
+    policies_df['masking asset name'] = policies_df.maskings.apply(lambda x: get_asset_name(args, x.get('id')))
 
-    policies_df['masking asset type name'] = policies_df.maskings.apply(lambda x: get_assettype_name(url, session, logger, x.get('type'), x.get('id'), names))
+    policies_df['masking asset type name'] = policies_df.maskings.apply(lambda x: get_assettype_name(args, x.get('type'), x.get('id')))
 
     policies_df['masking method'] = policies_df.maskings.apply(lambda x:  x.get('method'))
 
-    # standard masking asset is null, copy
+    # copy from scope asset if standard
     policies_df['masking asset id'] = np.where(policies_df['masking asset id'].isnull(), policies_df['scope asset id'], policies_df['masking asset id']) 
 
     policies_df['masking asset type'] = np.where(policies_df['masking asset type'].isnull(), policies_df['scope asset type'], policies_df['masking asset type']) 
@@ -197,15 +191,15 @@ def get_policies_maskings_transformed(url=None, session=None, logger=None, polic
 
 
 
-# get standards and access rules transformed
-def get_policies_transformed(url=None, session=None, logger=None, policies=None, names=None):
+# get protect standards and data access rules 
+def get_policies_dataframe(args=None, policies=None):
     policies_df = pd.DataFrame(policies).explode('groups').explode('assets').explode('maskings')
 
-    policies_df = get_policies_groups_transformed(url, session, logger, policies_df, names)
+    policies_df = get_policies_dataframe_groups(args, policies_df)
 
-    policies_df = get_policies_assets_transformed(url, session, logger, policies_df, names)
+    policies_df = get_policies_dataframe_assets(args, policies_df)
 
-    policies_df = get_policies_maskings_transformed(url, session, logger, policies_df, names)
+    policies_df = get_policies_dataframe_maskings(args, policies_df)
 
     policies_df.drop(['id', 'type', 'name'], axis=1, inplace=True)
 
@@ -215,15 +209,17 @@ def get_policies_transformed(url=None, session=None, logger=None, policies=None,
 
 
 
-# get column masking functions transformed
-def get_functions_masking_transformed(functions_df=None):    
+# get tags and column masking functions names 
+def get_functions_dataframe_maskings(args=None, functions_df=None):    
+    schemaName = args.catalog + '.' + args.schema
+
     functions_df['masking asset name'] = functions_df['masking asset name'].str.replace('[ .]', '', regex=True)
 
     functions_df['masking asset type name'] = functions_df['masking asset type name'].map({'Classification':'DataConcept', 'Data Category':'DataCategory'})
 
     functions_df = functions_df.assign(tag=lambda x: x['masking asset type name'] + ':' + x['masking asset name'])
 
-    functions_df = functions_df.assign(function=lambda x: x['masking asset type name'] + '_' + x['masking asset name'])
+    functions_df = functions_df.assign(function=lambda x: schemaName + '.' + x['masking asset type name'] + '_' + x['masking asset name'])
     
     functions_df.drop(['masking asset name'], axis=1, inplace=True)
 
@@ -231,15 +227,15 @@ def get_functions_masking_transformed(functions_df=None):
 
 
 
-# get column masking functions processed
-def get_functions_transformed(policies_df=None):
+# get tags and column masking functions from policies
+def get_functions_dataframe(args=None, policies_df=None):
     functions_df = policies_df.copy(deep=True)
 
     functions_df.drop(['scope asset id', 'scope asset name', 'scope asset type', 'scope asset type name', 'masking asset id', 'masking asset type', 'grantAccess'], axis=1, inplace=True)
 
     functions_df.drop_duplicates(inplace=True)
 
-    functions_df = get_functions_masking_transformed(functions_df)
+    functions_df = get_functions_dataframe_maskings(args, functions_df)
 
     functions_df.drop(['masking asset type name'], axis=1, inplace=True)
     
@@ -247,219 +243,156 @@ def get_functions_transformed(policies_df=None):
 
 
 
-# drop column masking functions
-def drop_masking_functions(host=None, token=None, warehouse=None, logger=None, functions_df=None):
+# drop column masking functions no longer active
+def drop_masking_functions(args=None, functions_df=None):
+    schemaName = args.catalog+'.'+args.schema
+
     try:    
         session = requests.Session()
 
-        session.auth = BearerAuth(token)
+        session.auth = BearerAuth(args.token)
 
         payload = {
-            'warehouse_id': warehouse,
+            'warehouse_id': args.warehouse,
             'statement': "SHOW USER FUNCTIONS IN sbi_template_unitycatalog;" 
         }
 
-        logger.debug('payload:\n%s', payload)
+        args.logger.debug('payload:\n%s', payload)
 
-        response = session.post(host + '/api/2.0/sql/statements', json=payload)
+        response = session.post(args.host + '/api/2.0/sql/statements', json=payload)
 
-        for f in response.json()['result']['data_array']: 
-            fname = f[0].split('.')[-1].lower()
+        args.logger.debug('response:\n%s', response.json())
 
-            found = True if len(functions_df.loc[functions_df['function'].str.lower() == fname]) else False
-            
-            if not found and fname != 'protect': 
+        before_df = pd.DataFrame(response.json()['result']['data_array'], columns=['function'])
+
+        tobedeleted_df = before_df.merge(pd.DataFrame(functions_df['function'].str.lower()), how='left', indicator=True)
+        
+        tobedeleted_df = tobedeleted_df[tobedeleted_df['_merge'] == 'left_only']
+
+        tobedeleted_df.drop(['_merge'], axis=1, inplace=True)
+
+        for index, row in tobedeleted_df.iterrows():
+            if row[0] == schemaName + '.protect': #reserved
+                continue
+
+            try:
                 payload = {
-                    'warehouse_id': warehouse,
-                    'statement': 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM main.sbi_template_unitycatalog.tag_assignments a, main.sbi_template_unitycatalog.tag_protection_methods b WHERE lower(b.function) = \'{}\' AND lower(a.tag) = lower(b.tag)'.format(fname)
+                    'warehouse_id': args.warehouse,
+                    'statement': 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM {}.tag_assignments a, {}.tag_protection_methods b WHERE lower(b.function) = \'{}\' AND lower(a.tag) = lower(b.tag)'.format(schemaName, schemaName, row[0])
                 }
 
-                logger.debug('payload:\n%s', payload)
+                args.logger.debug('payload:\n%s', payload)
 
-                response = session.post(host + '/api/2.0/sql/statements', json=payload)
+                response = session.post(args.host + '/api/2.0/sql/statements', json=payload)
 
-                logger.debug('response:\n%s', response.json())
+                args.logger.debug('response:\n%s', response.json())
 
-                try:
-                    for c in response.json()['result']['data_array']: 
-                        table = ".".join(c[:3])
+                for c in response.json()['result']['data_array']: 
+                    try:
+                        tableName = ".".join(c[:3])
 
-                        column = c[3]
+                        columnName = c[3]
 
                         payload = {
-                            'warehouse_id': warehouse,
-                            'statement': 'ALTER TABLE {} ALTER COLUMN {} DROP MASK;'.format(table, column)
+                            'warehouse_id': args.warehouse,
+                            'statement': 'ALTER TABLE {} ALTER COLUMN {} DROP MASK;'.format(tableName, columnName)
                         }
 
-                        logger.debug('payload:\n%s', payload)
+                        args.logger.debug('payload:\n%s', payload)
 
-                        response = session.post(host + '/api/2.0/sql/statements', json=payload)
+                        response = session.post(args.host + '/api/2.0/sql/statements', json=payload)
 
-                        logger.debug('response:\n%s', response.json())
+                        args.logger.debug('response:\n%s', response.json())
 
-                except Exception as e:
-                    pass
+                    except Exception as e:
+                        continue
 
                 try:
                     payload = {
-                        'warehouse_id': warehouse,
-                        'statement': 'DROP FUNCTION {};'.format(f[0])
+                        'warehouse_id': args.warehouse,
+                        'statement': 'DROP FUNCTION {};'.format(row[0])
                     }
 
-                    logger.debug('payload:\n%s', payload)
+                    args.logger.debug('payload:\n%s', payload)
 
-                    response = session.post(host + '/api/2.0/sql/statements', json=payload)
+                    response = session.post(args.host + '/api/2.0/sql/statements', json=payload)
 
-                    logger.debug('response:\n%s', response.json())
+                    args.logger.debug('response:\n%s', response.json())
 
                 except Exception as e:
                     pass
-            
+
+            except Exception as e:
+                pass
+    
     except Exception as e:
         pass
 
 
 
-# set column masking functions
-def set_masking_functions(host=None, token=None, warehouse=None, logger=None, functions_df=None):
-    try:
-        session = requests.Session()
+# get create or replace masking functions statement
+def get_create_functions_commands(args=None, functions_df=None):
+    schemaName = args.catalog + '.' + args.schema
 
-        session.auth = BearerAuth(token)
-
-        payload = {
-            'warehouse_id': warehouse,
-            'statement': "SHOW USER FUNCTIONS IN sbi_template_unitycatalog;" 
-        }
-
-        logger.debug('payload:\n%s', payload)
-
-        response = session.post(host + '/api/2.0/sql/statements', json=payload)
-
-        functions = [f[0].split('.')[-1].lower() for f in response.json()['result']['data_array']]
-
-        for index, row in functions_df.sort_values(by=['function']).iterrows():
-            fname = row['function'].lower()
-
-            found = True if fname in functions else False
-
-            if not found and fname != 'protect': 
-                payload = {
-                    'warehouse_id': warehouse,
-                    'statement': 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM main.sbi_template_unitycatalog.tag_assignments a, main.sbi_template_unitycatalog.tag_protection_methods b WHERE lower(b.function) = \'{}\' AND lower(a.tag) = lower(b.tag)'.format(fname)
-                }
-
-                logger.debug('payload:\n%s', payload)
-
-                columns = session.post(host + '/api/2.0/sql/statements', json=payload)
-
-                logger.debug('response:\n%s', columns.json())
-
-                try:
-                    payload = {
-                        'warehouse_id': warehouse,
-                        'statement': 'CREATE OR REPLACE FUNCTION main.sbi_template_unitycatalog.{}(value STRING) RETURNS STRING RETURN value;'.format(row['function'])
-                    }
-
-                    logger.debug('payload:\n%s', payload)
-
-                    response = session.post(host + '/api/2.0/sql/statements', json=payload)
-
-                    logger.debug('response:\n%s', response.json())
-
-                except Exception as e:
-                    pass
-
-                try:
-                    for c in columns.json()['result']['data_array']: 
-                        table = ".".join(c[:3])
-
-                        column = c[3]
-
-                        payload = {
-                            'warehouse_id': warehouse,
-                            'statement': 'ALTER TABLE {} ALTER COLUMN {} SET MASK main.sbi_template_unitycatalog.{};'.format(table, column, row['function'])
-                        }
-
-                        logger.debug(payload)
-
-                        response = session.post(host + '/api/2.0/sql/statements', json=payload)
-
-                        logger.debug('response:\n%s', response.json())
-
-                except Exception as e:
-                    pass
-
-                try:
-                    payload = {
-                        'warehouse_id': warehouse,
-                        'statement': 'DROP FUNCTION main.sbi_template_unitycatalog.{};'.format(row['function'])
-                    }
-
-                    logger.debug('payload:\n%s', payload)
-
-                    response = session.post(host + '/api/2.0/sql/statements', json=payload)
-
-                    logger.debug('response:\n%s', response.json())
-
-                except Exception as e:
-                    pass
-
-    except Exception as e:
-        pass
-
-
-
-# get column masking functions commands
-def get_create_functions_commands(functions_df=None):
     statement = ''
-    statements = []
 
-    last = None
+    statements = [] #['TRUNCATE TABLE {}.tag_protection_methods;'.format(schemaName)]
+
+    lastTag = None
+    lastFunction = None
     for index, row in functions_df.sort_values(by=['function']).iterrows():
-        if row['function'] != last:
+        if row['function'] != lastFunction:
             if len(statement):
                 statement = '{}\nELSE value\nEND;\n'.format(statement)
+
                 statements.append(statement)
+
+                #statements.append('INSERT INTO {}.tag_protection_methods VALUES (\'{}\', \'{}\');'.format(schemaName, lastTag, lastFunction))
+
                 statement = ''
 
-            statement = '{}\nCREATE OR REPLACE FUNCTION main.sbi_template_unitycatalog.{}(value STRING, method STRING)\nRETURNS STRING\nRETURN CASE'.format(statement, row['function'])
+            statement = '{}\nCREATE OR REPLACE FUNCTION {}(value STRING, method STRING)\nRETURNS STRING\nRETURN CASE'.format(statement, row['function'])
             
-            last = row['function']
+            lastTag = row['tag']
+            lastFunction = row['function']
 
-        statement = '{}\nWHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN main.sbi_template_unitycatalog.protect(value, \'{}\')'.format(statement, row['group name'], row['masking method'])
+        statement = '{}\nWHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN {}.protect(value, \'{}\')'.format(statement, row['group name'], schemaName,row['masking method'])
 
     if len(statement):
         statement = '{}\nELSE value\nEND;\n'.format(statement)
+        
         statements.append(statement)
+
+        #statements.append('INSERT INTO {}.tag_protection_methods VALUES (\'{}\', \'{}\');'.format(schemaName, lastTag, lastFunction))
+
+        statement = ''
 
     return statements
 
 
 
-# update column masking functions
-def update_masking_functions(host=None, token=None, warehouse=None, logger=None, functions_df=None):
+# create or replace column masking functions
+def update_masking_functions(args=None, functions_df=None):
     session = requests.Session()
 
-    session.auth = BearerAuth(token)
+    session.auth = BearerAuth(args.token)
 
-    for statement in get_create_functions_commands(functions_df):
+    for statement in get_create_functions_commands(args, functions_df):
         payload = {
-            'warehouse_id': warehouse,
+            'warehouse_id': args.warehouse,
             'statement': statement
         }
 
-        response = session.post(host + '/api/2.0/sql/statements', json=payload)
+        args.logger.debug('payload:\n%s', payload)
 
-        logger.debug('response:\n%s', response.json())
+        response = session.post(args.host + '/api/2.0/sql/statements', json=payload)
+
+        args.logger.debug('response:\n%s', response.json())
+
 
 
 # run
 def run(argv=None):
-    logger = get_logger(logging.INFO)
-
-    logger.debug("got logger")
-
     parser = argparse.ArgumentParser()
     
     parser.add_argument(
@@ -499,6 +432,18 @@ def run(argv=None):
         help='databricks warehouse id')
 
     parser.add_argument(
+        '--db-catalog',
+        dest='catalog',
+        required=True,
+        help='databricks catalog name')
+
+    parser.add_argument(
+        '--db-schema',
+        dest='schema',
+        required=True,
+        help='databricks schema name')
+
+    parser.add_argument(
         '--logger',
         dest='logger',
         required=False,
@@ -507,43 +452,59 @@ def run(argv=None):
 
     args, options= parser.parse_known_args(argv)
 
-    if args.logger is not None:
-        logger = get_logger(int(args.logger))
+    args.logger = get_logger(int(args.logger)) if args.logger is not None else get_logger(logging.INFO)
 
-    logger.debug("parsed known args")        
+    args.logger.info("got args")        
 
-    names= {}
+    # names
+    args.names= {}
 
-    session = get_session(args)
+    # get session
+    args.session = get_session(args=args)
 
     # get policies
-    policies = get_policies(url=args.url, session=session, logger=logger)
+    policies = get_policies(args=args)
 
-    logger.debug("got policies")        
+    args.logger.info("got policies")        
 
-    policies_df = get_policies_transformed(url=args.url, session=session, logger=logger, policies=policies, names=names)
+    policies_df = get_policies_dataframe(args=args, policies=policies)
 
-    logger.debug("got policies transformed")        
-    
+    args.logger.info("got policies dataframe")        
 
     # get masking functions
-    functions_df = get_functions_transformed(policies_df)
+    functions_df = get_functions_dataframe(args=args, policies_df=policies_df)
 
-    logger.debug("got functions from policies")        
+    args.logger.info("got mask functions from policies")        
+    
+    # drop old masking functions
+    drop_masking_functions(args=args, functions_df=functions_df)
 
-    # drop masking functions
-    drop_masking_functions(host=args.host, token=args.token, warehouse=args.warehouse, logger=logger, functions_df=functions_df)
+    args.logger.info("dropped column masking functions")        
 
-    logger.debug("dropped column masking functions")        
+    # update all masking functions
+    update_masking_functions(args=args, functions_df=functions_df)
 
-    # set masking functions
-    set_masking_functions(host=args.host, token=args.token, warehouse=args.warehouse, logger=logger, functions_df=functions_df)
+    args.logger.info("updated column masking functions")        
 
-    logger.debug("added column masking functions")        
+    # store all masking functions
+    functions_sdf=spark.createDataFrame(functions_df[['tag','function']].sort_values(by=['tag']))
+   
+    functions_sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.tag_protection_methods")
 
-    # update masking functions
-    update_masking_functions(host=args.host, token=args.token, warehouse=args.warehouse, logger=logger, functions_df=functions_df)
+    args.logger.info("persist column masking functions")        
 
-    logger.debug("updated column masking functions")        
+    # apply all masking functions
+    #apply_masking_functions(args=args, functions_df=functions_df)
 
+    #args.logger.debug("applied column masking functions")        
+
+    # drop tag assignments dupps
+    assignments_sdf = sqlContext.sql("SELECT DISTINCT * FROM main.sbi_template_unitycatalog.tag_assignments") 
+
+    assignments_sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.tag_assignments")
+
+    args.logger.info("dropped duplicate tag assignments")        
+
+    args.logger.info("done")     
+    
     return policies_df, functions_df 
