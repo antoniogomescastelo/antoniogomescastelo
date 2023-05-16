@@ -429,34 +429,16 @@ def run(argv=None):
         help='collibra instance password')
 
     parser.add_argument(
-        '--dbc-host',
-        dest='host',
-        required=True,
-        help='databricks workspace url')
-
-    parser.add_argument(
-        '--dbc-token',
-        dest='token',
-        required=True,
-        help='databricks workspace token')
-
-    parser.add_argument(
-        '--db-warehouse',
-        dest='warehouse',
-        required=True,
-        help='databricks warehouse id')
-
-    parser.add_argument(
         '--db-catalog',
         dest='catalog',
         required=True,
-        help='databricks catalog name')
+        help='capability catalog name')
 
     parser.add_argument(
         '--db-schema',
         dest='schema',
         required=True,
-        help='databricks schema name')
+        help='capability schema name')
 
     parser.add_argument(
         '--logger',
