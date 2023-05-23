@@ -116,11 +116,11 @@ def get_assettype_name(args=None, type_uuid=None, asset_uuid=None):
 
 
 
-# get protect standards and acccess rules
+# get standards and acccess rules
 def get_policies(args=None):
     policies = {}
 
-    allItems = ['type', 'id', 'name', 'groups', 'asset', 'assets', 'masking', 'maskings', 'grantAccess']
+    allItems = ['type', 'id', 'name', 'groups', 'asset', 'assets', 'masking', 'maskings', 'grantAccess', 'rowFilters']
 
     try:
         response = args.session.get(args.url + '/rest/protect/v1/policies')
@@ -136,117 +136,113 @@ def get_policies(args=None):
 
 
 
-# get group names from protect policy groups
-def get_policies_dataframe_groups(args, policies_df=None):
-    policies_df['group name'] = policies_df.groups.apply(lambda x: x.get('name'))
+# get group names from policy groups
+def get_masking_rules_groups(args, protection_rules_df=None):
+    protection_rules_df['groupName'] = protection_rules_df.groups.apply(lambda x: x.get('name'))
 
-    policies_df.drop(['groups'], axis=1, inplace=True)
+    protection_rules_df.drop(['groups'], axis=1, inplace=True)
 
-    return policies_df
-
-
-
-# get assets details from protect policy scope assets
-def get_policies_dataframe_assets(args=None, policies_df=None):
-    policies_df['assets'] = np.where(policies_df.assets.isnull(), policies_df['asset'], policies_df['assets'])
-
-    policies_df['scope asset id'] = policies_df.assets.apply(lambda x: x.get('id'))
-
-    policies_df['scope asset type'] = policies_df.assets.apply(lambda x: x.get('type'))
-
-    policies_df['scope asset name'] = policies_df.assets.apply(lambda x: get_asset_name(args, x.get('id')))
-
-    policies_df['scope asset type name'] = policies_df.assets.apply(lambda x: get_assettype_name(args, x.get('type'), x.get('id')))
-
-    policies_df.drop(['asset', 'assets'], axis=1, inplace=True)
-
-    return policies_df
+    return protection_rules_df
 
 
 
-# get masking asset details from protect policy maskings
-def get_policies_dataframe_maskings(args=None, policies_df=None):
-    policies_df['maskings'] = np.where(policies_df.maskings.isnull(), policies_df['masking'], policies_df['maskings']) 
+# get assets details from policy scope assets
+def get_masking_rules_assets(args=None, protection_rules_df=None):
+    protection_rules_df['assets'] = np.where(protection_rules_df.assets.isnull(), protection_rules_df['asset'], protection_rules_df['assets'])
 
-    policies_df['masking asset id'] = policies_df.maskings.apply(lambda x: x.get('id'))
+    protection_rules_df['scopeAssetId'] = protection_rules_df.assets.apply(lambda x: x.get('id'))
 
-    policies_df['masking asset type'] = policies_df.maskings.apply(lambda x: x.get('type'))
+    protection_rules_df['scopeAssetType'] = protection_rules_df.assets.apply(lambda x: x.get('type'))
 
-    policies_df['masking asset name'] = policies_df.maskings.apply(lambda x: get_asset_name(args, x.get('id')))
+    protection_rules_df['scopeAssetName'] = protection_rules_df.assets.apply(lambda x: get_asset_name(args, x.get('id')))
 
-    policies_df['masking asset type name'] = policies_df.maskings.apply(lambda x: get_assettype_name(args, x.get('type'), x.get('id')))
+    protection_rules_df['scopeAssetTypeName'] = protection_rules_df.assets.apply(lambda x: get_assettype_name(args, x.get('type'), x.get('id')))
 
-    policies_df['masking method'] = policies_df.maskings.apply(lambda x:  x.get('method'))
+    protection_rules_df.drop(['asset', 'assets'], axis=1, inplace=True)
+
+    return protection_rules_df
+
+
+
+# get masking asset details from policy maskings
+def get_masking_rules_maskings(args=None, protection_rules_df=None):
+    protection_rules_df['maskings'] = np.where(protection_rules_df.maskings.isnull(), protection_rules_df['masking'], protection_rules_df['maskings']) 
+
+    protection_rules_df['maskingAssetId'] = protection_rules_df.maskings.apply(lambda x: x.get('id'))
+
+    protection_rules_df['maskingAssetType'] = protection_rules_df.maskings.apply(lambda x: x.get('type'))
+
+    protection_rules_df['maskingAssetName'] = protection_rules_df.maskings.apply(lambda x: get_asset_name(args, x.get('id')))
+
+    protection_rules_df['maskingAssetTypeName'] = protection_rules_df.maskings.apply(lambda x: get_assettype_name(args, x.get('type'), x.get('id')))
+
+    protection_rules_df['maskingMethod'] = protection_rules_df.maskings.apply(lambda x:  x.get('method'))
 
     # copy from scope asset if null
-    policies_df['masking asset id'] = np.where(policies_df['masking asset id'].isnull(), policies_df['scope asset id'], policies_df['masking asset id']) 
+    protection_rules_df['maskingAssetId'] = np.where(protection_rules_df['maskingAssetId'].isnull(), protection_rules_df['scopeAssetId'], protection_rules_df['maskingAssetId']) 
 
-    policies_df['masking asset type'] = np.where(policies_df['masking asset type'].isnull(), policies_df['scope asset type'], policies_df['masking asset type']) 
+    protection_rules_df['maskingAssetType'] = np.where(protection_rules_df['maskingAssetType'].isnull(), protection_rules_df['scopeAssetType'], protection_rules_df['maskingAssetType']) 
     
-    policies_df['masking asset name'] = np.where(policies_df['masking asset name'].isnull(), policies_df['scope asset name'], policies_df['masking asset name']) 
+    protection_rules_df['maskingAssetName'] = np.where(protection_rules_df['maskingAssetName'].isnull(), protection_rules_df['scopeAssetName'], protection_rules_df['maskingAssetName']) 
     
-    policies_df['masking asset type name'] = np.where(policies_df['masking asset type name'].isnull(), policies_df['scope asset type name'], policies_df['masking asset type name']) 
+    protection_rules_df['maskingAssetTypeName'] = np.where(protection_rules_df['maskingAssetTypeName'].isnull(), protection_rules_df['scopeAssetTypeName'], protection_rules_df['maskingAssetTypeName']) 
 
-    policies_df.drop(['masking', 'maskings'], axis=1, inplace=True)
+    protection_rules_df.drop(['masking', 'maskings'], axis=1, inplace=True)
 
-    return policies_df
+    return protection_rules_df
 
 
 
-# get protect standards and data access rules 
-def get_policies_dataframe(args=None, policies=None):
-    policies_df = pd.DataFrame(policies).explode('groups').explode('assets').explode('maskings')
+# get standards and data access rules 
+def get_masking_rules(args=None, policies=None):
+    protection_rules_df = pd.DataFrame(policies).explode('groups').explode('assets').explode('maskings')
 
-    policies_df = get_policies_dataframe_groups(args, policies_df)
+    protection_rules_df = get_masking_rules_groups(args, protection_rules_df)
 
-    policies_df = get_policies_dataframe_assets(args, policies_df)
+    protection_rules_df = get_masking_rules_assets(args, protection_rules_df)
 
-    policies_df = get_policies_dataframe_maskings(args, policies_df)
+    protection_rules_df = get_masking_rules_maskings(args, protection_rules_df)
 
-    policies_df.drop(['id', 'type', 'name'], axis=1, inplace=True)
+    protection_rules_df.drop(['id', 'type', 'name'], axis=1, inplace=True)
 
-    policies_df.drop_duplicates(inplace=True)
-
-    return policies_df
+    return protection_rules_df
 
 
 
 # get tags and column masking functions names 
-def get_functions_dataframe_maskings(args=None, functions_df=None):    
+def get_masking_functions_maskings(args=None, masking_functions_df=None):    
     schemaName = args.catalog + '.' + args.schema
 
-    functions_df['masking asset name'] = functions_df['masking asset name'].str.replace('[ .]', '', regex=True)
+    masking_functions_df['maskingAssetName'] = masking_functions_df['maskingAssetName'].str.replace('[ .]', '', regex=True)
 
-    functions_df['masking asset type name'] = functions_df['masking asset type name'].map({'Classification':'DataConcept', 'Data Category':'DataCategory'})
+    masking_functions_df['maskingAssetTypeName'] = masking_functions_df['maskingAssetTypeName'].map({'Classification':'DataConcept', 'Data Category':'DataCategory'})
 
-    functions_df = functions_df.assign(tag=lambda x: x['masking asset type name'] + ':' + x['masking asset name'])
+    masking_functions_df = masking_functions_df.assign(tag=lambda x: x['maskingAssetTypeName'] + ':' + x['maskingAssetName'])
 
-    functions_df = functions_df.assign(function=lambda x: schemaName + '.' + x['masking asset type name'] + '_' + x['masking asset name'])
+    masking_functions_df = masking_functions_df.assign(function=lambda x: schemaName + '.' + x['maskingAssetTypeName'].str.lower() + '_' + x['maskingAssetName'].str.lower())
     
-    functions_df.drop(['masking asset name'], axis=1, inplace=True)
+    masking_functions_df.drop(['maskingAssetName'], axis=1, inplace=True)
 
-    return functions_df
+    return masking_functions_df
 
 
 
 # get tags and column masking functions from policies
-def get_functions_dataframe(args=None, policies_df=None):
-    functions_df = policies_df.copy(deep=True)
+def get_masking_functions(args=None, protection_rules_df=None):
+    masking_functions_df = protection_rules_df[['groupName', 'maskingAssetName', 'maskingAssetTypeName', 'maskingMethod']].copy(deep=True)
 
-    functions_df.drop(['scope asset id', 'scope asset name', 'scope asset type', 'scope asset type name', 'masking asset id', 'masking asset type', 'grantAccess'], axis=1, inplace=True)
+    masking_functions_df.drop_duplicates(inplace=True)
 
-    functions_df.drop_duplicates(inplace=True)
+    masking_functions_df = get_masking_functions_maskings(args, masking_functions_df)
 
-    functions_df = get_functions_dataframe_maskings(args, functions_df)
-
-    functions_df.drop(['masking asset type name'], axis=1, inplace=True)
+    masking_functions_df.drop(['maskingAssetTypeName'], axis=1, inplace=True)
     
-    return functions_df
+    return masking_functions_df
 
 
 
 # drop column masking functions no longer active
-def drop_masking_functions(args=None, functions_df=None):
+def drop_masking_functions(args=None, masking_functions_df=None):
     schemaName = args.catalog+'.'+args.schema
 
     try:    
@@ -256,7 +252,7 @@ def drop_masking_functions(args=None, functions_df=None):
         
         before_df = sqlContext.sql(statement).toPandas()  
         
-        tobedeleted_df = before_df.merge(pd.DataFrame(functions_df['function'].str.lower()), how='left', indicator=True)
+        tobedeleted_df = before_df.merge(pd.DataFrame(masking_functions_df['function']), how='left', indicator=True) #.str.lower()
         
         tobedeleted_df = tobedeleted_df[tobedeleted_df['_merge'] == 'left_only']
 
@@ -267,7 +263,7 @@ def drop_masking_functions(args=None, functions_df=None):
                 continue
 
             try:
-                statement = 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM {}.tag_assignments a, {}.tag_protection_methods b WHERE lower(b.function) = \'{}\' AND lower(a.tag) = lower(b.tag)'.format(schemaName, schemaName, row[0])
+                statement = 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM {}.tag_assignments a, {}.tag_masking_functions b WHERE b.function = \'{}\' AND lower(a.tag) = lower(b.tag)'.format(schemaName, schemaName, row[0]) #lower(b.function)
 
                 args.logger.debug('statement:\n%s', statement)
                 
@@ -314,7 +310,7 @@ def drop_masking_functions(args=None, functions_df=None):
 
 
 # get create or replace masking functions statement
-def get_create_functions_commands(args=None, functions_df=None):
+def get_create_functions_commands(args=None, masking_functions_df=None):
     statement = ''
 
     statements = []
@@ -323,7 +319,7 @@ def get_create_functions_commands(args=None, functions_df=None):
 
     schemaName = args.catalog + '.' + args.schema
 
-    for index, row in functions_df.sort_values(by=['function']).iterrows():
+    for index, row in masking_functions_df.sort_values(by=['function']).iterrows():
         if row['function'] != lastFunction:
             if len(statement):
                 statements.append('DROP FUNCTION {};'.format(lastFunction))
@@ -339,7 +335,7 @@ def get_create_functions_commands(args=None, functions_df=None):
             
             lastFunction = row['function']
 
-        statement = '{} WHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN {}.protect(value, \'{}\')'.format(statement, row['group name'], schemaName,row['masking method'])
+        statement = '{} WHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN {}.protect(value, \'{}\')'.format(statement, row['groupName'], schemaName,row['maskingMethod'])
 
     if len(statement):
         statements.append('DROP FUNCTION {};'.format(lastFunction))
@@ -356,8 +352,8 @@ def get_create_functions_commands(args=None, functions_df=None):
 
 
 # create or replace column masking functions
-def update_masking_functions(args=None, functions_df=None):
-    for statement in get_create_functions_commands(args, functions_df):
+def update_masking_functions(args=None, masking_functions_df=None):
+    for statement in get_create_functions_commands(args, masking_functions_df):
         try:
             args.logger.debug('statement:\n%s', statement)
             
@@ -371,11 +367,11 @@ def update_masking_functions(args=None, functions_df=None):
 
 
 
-def apply_masking_functions(args=None, functions_df=None):
+def apply_masking_functions(args=None, masking_functions_df=None):
     schemaName = args.catalog+'.'+args.schema
     
     try:    
-        statement = 'SELECT DISTINCT a.*, b.function FROM {}.tag_assignments a, {}.tag_protection_methods b WHERE lower(b.tag) = lower(a.tag) ORDER BY b.function DESC;'.format(schemaName, schemaName) 
+        statement = 'SELECT DISTINCT a.*, b.function FROM {}.tag_assignments a, {}.tag_masking_functions b WHERE lower(b.tag) = lower(a.tag) ORDER BY b.function DESC;'.format(schemaName, schemaName) 
 
         args.logger.debug('statement:\n%s', statement)
         
@@ -403,6 +399,36 @@ def apply_masking_functions(args=None, functions_df=None):
     except Exception as e:
         args.logger.debug('response:\nFAILED')
         pass
+
+
+
+# get row level filters assets
+def get_rowlevel_filters_assets(args=None, rowlevel_filters_df=None):
+    rowlevel_filters_df['action'] = rowlevel_filters_df.rowFilters.apply(lambda x: x.get('action'))
+
+    rowlevel_filters_df['dataClassification'] = rowlevel_filters_df.rowFilters.apply(lambda x: "DataConcept:" + get_asset_name(args, x.get('dataClassification'))).str.replace('[ .]', '', regex=True)
+
+    rowlevel_filters_df['codeValue'] = rowlevel_filters_df.rowFilters.apply(lambda x: get_asset_name(args, x.get('codeValue')))
+
+    rowlevel_filters_df.drop(['rowFilters'], axis=1, inplace=True)
+
+    return rowlevel_filters_df
+
+
+
+# get row level filter functions  
+def get_rowlevel_filters(args=None, protection_rules_df=None):    
+    rowlevel_filters_df = protection_rules_df[['rowFilters', 'groupName']].copy(deep=True)
+
+    rowlevel_filters_df = rowlevel_filters_df[rowlevel_filters_df.rowFilters.notnull()]
+
+    rowlevel_filters_df = rowlevel_filters_df[rowlevel_filters_df["rowFilters"].str.len() != 0]
+
+    rowlevel_filters_df = rowlevel_filters_df.explode('rowFilters')
+
+    rowlevel_filters_df = get_rowlevel_filters_assets(args=args, rowlevel_filters_df=rowlevel_filters_df )
+
+    return rowlevel_filters_df
 
 
 
@@ -456,7 +482,7 @@ def run(argv=None):
     # names
     args.names= {}
 
-    # get session
+    # session
     args.session = get_session(args=args)
 
     # get policies
@@ -464,9 +490,12 @@ def run(argv=None):
 
     args.logger.info("got policies")        
 
-    policies_df = get_policies_dataframe(args=args, policies=policies)
+    # get masking rules
+    protection_rules_df = get_masking_rules(args=args, policies=policies)
 
-    args.logger.info("got policies dataframe")        
+    args.logger.info("got protection rules")        
+
+
 
     # use main catalog 
     schemaName = args.catalog + '.' + args.schema
@@ -474,39 +503,47 @@ def run(argv=None):
     sqlContext.sql("use catalog {};".format(args.catalog))  
 
     # get masking functions
-    functions_df = get_functions_dataframe(args=args, policies_df=policies_df)
+    masking_functions_df = get_masking_functions(args=args, protection_rules_df=protection_rules_df)
 
-    args.logger.info("got mask functions from policies")        
+    args.logger.info("got masking functions")        
 
     # drop old masking functions
-    drop_masking_functions(args=args, functions_df=functions_df)
+    drop_masking_functions(args=args, masking_functions_df=masking_functions_df)
 
-    args.logger.info("dropped old column masking functions")        
+    args.logger.info("dropped old masking functions")        
 
-    # update all masking functions
-    update_masking_functions(args=args, functions_df=functions_df)
+    # update newest masking functions
+    update_masking_functions(args=args, masking_functions_df=masking_functions_df)
 
-    args.logger.info("updated column masking functions")        
+    args.logger.info("updated newest masking functions")        
 
-    # store all masking functions
-    functions_sdf=spark.createDataFrame(functions_df[['tag','function']].sort_values(by=['tag']))
+    # store newest masking functions
+    sdf = spark.createDataFrame(masking_functions_df[['tag', 'function']].sort_values(by=['tag']))
    
-    functions_sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.tag_protection_methods")
+    sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.tag_masking_functions")
 
-    args.logger.info("saved column masking functions")        
+    args.logger.info("saved newest masking functions")        
 
     # apply all masking functions
-    apply_masking_functions(args=args, functions_df=functions_df)
+    apply_masking_functions(args=args, masking_functions_df=masking_functions_df)
 
-    args.logger.info("set column masking functions")        
+    args.logger.info("set newest masking functions")        
 
-    # drop tag assignments dups
-    assignments_sdf = sqlContext.sql("SELECT DISTINCT * FROM {}.tag_assignments".format(schemaName)) 
+    # drop duplicate assignments 
+    sdf = sqlContext.sql("SELECT DISTINCT * FROM {}.tag_assignments".format(schemaName)) 
 
-    assignments_sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.tag_assignments")
+    sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.tag_assignments")
 
     args.logger.info("drop duplicate assignments")        
 
+
+    # get row level filters
+    rowlevel_filters_df = get_rowlevel_filters(args=args, protection_rules_df=protection_rules_df)
+
+    args.logger.info("got row level filters")        
+
+
     args.logger.info("done")     
     
-    return policies_df, functions_df 
+    return protection_rules_df, masking_functions_df, rowlevel_filters_df
+
