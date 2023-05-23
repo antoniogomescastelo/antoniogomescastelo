@@ -10,6 +10,8 @@ from databricks.sdk.runtime import *
 import numpy as np
 import pandas as pd
 
+import hashlib
+
 
 # bearer auth
 class BearerAuth(requests.auth.AuthBase):
@@ -416,7 +418,7 @@ def get_rowlevel_filters_assets(args=None, rowlevel_filters_df=None):
 
 
 
-# get row level filter functions  
+# get row level filters  
 def get_rowlevel_filters(args=None, protection_rules_df=None):    
     rowlevel_filters_df = protection_rules_df[['rowFilters', 'groupName']].copy(deep=True)
 
@@ -429,6 +431,114 @@ def get_rowlevel_filters(args=None, protection_rules_df=None):
     rowlevel_filters_df = get_rowlevel_filters_assets(args=args, rowlevel_filters_df=rowlevel_filters_df )
 
     return rowlevel_filters_df
+
+
+
+# get table row level filters
+def get_table_rowlevel_filters(args=None, rowlevel_filters_df=None):
+    schemaName = args.catalog+'.'+args.schema
+    
+    classifications = ",".join(rowlevel_filters_df['dataClassification'].apply(lambda x: "'"+x.lower()+"'").astype(str).values.tolist())
+
+    results_df = None
+    try:    
+        statement = 'SELECT DISTINCT * FROM {}.tag_assignments a WHERE lower(a.tag) in ({})'.format(schemaName, classifications)
+
+        args.logger.debug('statement:\n%s', statement)
+        
+        results_df = sqlContext.sql(statement).toPandas()  
+
+        args.logger.debug('response:\n%s', results_df.shape)
+
+        results_df = results_df.assign(filter=lambda x: schemaName + '.' + x['catalog'] + '_' + x['schema'] + '_' + x['table'])
+
+
+    except Exception as e:
+        args.logger.debug('response:\nFAILED')
+        pass
+
+    return results_df
+
+
+
+# get create or replace table rowlevel filters statements
+def get_create_filters_commands(args=None, table_rowlevel_filters_df=None):
+    schemaName = args.catalog + '.' + args.schema
+
+    statement = ''
+
+    statements = []
+
+    lastFilter = None
+    lastGroupName = None
+    lastTableName = None
+    
+    for index, row in table_rowlevel_filters_df.sort_values(by=['filter', 'groupName', 'column']).iterrows():
+        if row['filter'] != lastFilter: 
+            if lastFilter is not None:
+                statements.append('DROP FUNCTION {};'.format(lastFilter))
+
+                statement = '{} ELSE TRUE END ELSE TRUE END;'.format(statement)
+
+                statements.append(statement)
+
+                statement = 'ALTER TABLE {} SET ROW FILTER {} ON ({})'.format(lastTableName, lastFilter, params.replace('STRING',''));
+
+                statements.append(statement)
+
+            
+            lastTableName = row['catalog'] + '.' + row['schema'] + '.' + row['table']
+
+            params = ", ".join(table_rowlevel_filters_df[table_rowlevel_filters_df['filter']==row['filter']]['column'].drop_duplicates().apply(lambda x: x + ' STRING').tolist())
+
+            statement = 'CREATE OR REPLACE FUNCTION {} ({}) RETURNS BOOLEAN RETURN CASE'.format(row['filter'], params)
+
+            lastGroupName = None
+
+            lastFilter = row['filter']
+
+
+        if row['groupName'] != lastGroupName:
+            if lastGroupName is not None:
+                statement = '{} ELSE TRUE END'.format(statement)          
+
+            statement = '{} WHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN CASE'.format(statement, row['groupName'])
+
+            lastGroupName = row['groupName']
+ 
+
+        statement = '{} WHEN {} == \'{}\' THEN FALSE'.format(statement, row['column'], row['codeValue'])
+
+
+    if len(statement):        
+        statements.append('DROP FUNCTION {};'.format(lastFilter))
+
+        statement = '{} ELSE TRUE END ELSE TRUE END;'.format(statement)
+
+        statements.append(statement)
+
+        statement = 'ALTER TABLE {} SET ROW FILTER {} ON ({})'.format(lastTableName, lastFilter, params);
+
+        statements.append(statement)
+
+
+    return statements
+
+
+
+# create or replace table rowlevel filters
+def update_table_rowlevel_filters(args=None, table_rowlevel_filters_df=None):
+    for statement in get_create_filters_commands(args, table_rowlevel_filters_df):
+        try:
+            args.logger.debug('statement:\n%s', statement)
+            
+            results_df = sqlContext.sql(statement).toPandas()
+            
+            args.logger.debug('response:\n%s', results_df.shape)
+        
+        except Exception as e:
+            args.logger.debug('response:\nFAILED')
+            pass
 
 
 
@@ -536,14 +646,42 @@ def run(argv=None):
 
     args.logger.info("drop duplicate assignments")        
 
-
     # get row level filters
     rowlevel_filters_df = get_rowlevel_filters(args=args, protection_rules_df=protection_rules_df)
 
     args.logger.info("got row level filters")        
 
+    # get tables with row level filters
+    table_rowlevel_filters_df = get_table_rowlevel_filters(args=args, rowlevel_filters_df=rowlevel_filters_df)
+
+    table_rowlevel_filters_df = pd.merge(table_rowlevel_filters_df, rowlevel_filters_df,  how='left', left_on=table_rowlevel_filters_df['tag'].str.lower(), right_on = rowlevel_filters_df['dataClassification'].str.lower())
+    
+    args.logger.info("got tables row level filters ")        
+
+    # update newest table rowlevel filters
+    update_table_rowlevel_filters(args=args, table_rowlevel_filters_df=table_rowlevel_filters_df)
+
+    args.logger.info("updated newest table rowlevel filters")        
+
+
+
+
+
+
+    # store all table rowlevel filters
+    #sdf=spark.createDataFrame(table_rowlevel_filters_df)
+   
+    #sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.row_access_filters")
+
+    #args.logger.info("saved row level filters")        
+
+
+
+
+
+
 
     args.logger.info("done")     
     
-    return protection_rules_df, masking_functions_df, rowlevel_filters_df
+    return protection_rules_df, masking_functions_df, rowlevel_filters_df, table_rowlevel_filters_df
 
