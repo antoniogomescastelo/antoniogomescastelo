@@ -10,8 +10,6 @@ from databricks.sdk.runtime import *
 import numpy as np
 import pandas as pd
 
-import hashlib
-
 
 # bearer auth
 class BearerAuth(requests.auth.AuthBase):
@@ -313,41 +311,35 @@ def drop_masking_functions(args=None, masking_functions_df=None):
 
 # get create or replace masking functions statement
 def get_create_functions_commands(args=None, masking_functions_df=None):
+    schemaName = args.catalog + '.' + args.schema
+
     statement = ''
 
     statements = []
 
     lastFunction = None
 
-    schemaName = args.catalog + '.' + args.schema
-
     for index, row in masking_functions_df.sort_values(by=['function']).iterrows():
-        if row['function'] != lastFunction:
-            if len(statement):
+        if row['function'] != lastFunction: # if new funtion
+            if lastFunction is not None:    # if not first function
                 statements.append('DROP FUNCTION {};'.format(lastFunction))
 
-                statement = '{} ELSE \'[REDACTED]\' END; '.format(statement)
-                #statement = '{} ELSE {}.protect(value, \'DEFAULT_MASKING\') END; '.format(statement, schemaName)
+                statements.append('{} ELSE \'[REDACTED]\' END; '.format(statement))
+                #statements.append(sta'{} ELSE {}.protect(value, \'DEFAULT_MASKING\') END; '.format(statement, schemaName)tement)
 
-                statements.append(statement)
-
-                statement = ''
-
+            # each new function
             statement = 'CREATE OR REPLACE FUNCTION {}(value STRING) RETURNS STRING RETURN CASE'.format(row['function'])
             
             lastFunction = row['function']
 
+        # each protection method
         statement = '{} WHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN {}.protect(value, \'{}\')'.format(statement, row['groupName'], schemaName,row['maskingMethod'])
 
-    if len(statement):
+    if len(statement): # last statement
         statements.append('DROP FUNCTION {};'.format(lastFunction))
 
-        statement = '{} ELSE \'[REDACTED]\' END; '.format(statement)
-        #statement = '{} ELSE {}.protect(value, \'DEFAULT_MASKING\') END; '.format(statement, schemaName)
-        
-        statements.append(statement)
-
-        statement = ''
+        statements.append('{} ELSE \'[REDACTED]\' END; '.format(statement))
+        #statements.append('{} ELSE {}.protect(value, \'DEFAULT_MASKING\') END; '.format(statement, schemaName))
 
     return statements
 
@@ -474,8 +466,8 @@ def get_create_filters_commands(args=None, table_rowlevel_filters_df=None):
     lastTableName = None
     
     for index, row in table_rowlevel_filters_df.sort_values(by=['filter', 'groupName', 'column']).iterrows():
-        if row['filter'] != lastFilter: 
-            if lastFilter is not None:
+        if row['filter'] != lastFilter: # if new filter
+            if lastFilter is not None: # if not first filter
                 statements.append('DROP FUNCTION {};'.format(lastFilter))
 
                 statement = '{} ELSE TRUE END ELSE TRUE END;'.format(statement)
@@ -486,9 +478,7 @@ def get_create_filters_commands(args=None, table_rowlevel_filters_df=None):
 
                 statements.append(statement)
 
-            
-            lastTableName = row['catalog'] + '.' + row['schema'] + '.' + row['table']
-
+            # each new filter            
             params = ", ".join(table_rowlevel_filters_df[table_rowlevel_filters_df['filter']==row['filter']]['column'].drop_duplicates().apply(lambda x: x + ' STRING').tolist())
 
             statement = 'CREATE OR REPLACE FUNCTION {} ({}) RETURNS BOOLEAN RETURN CASE'.format(row['filter'], params)
@@ -497,29 +487,28 @@ def get_create_filters_commands(args=None, table_rowlevel_filters_df=None):
 
             lastFilter = row['filter']
 
+            lastTableName = row['catalog'] + '.' + row['schema'] + '.' + row['table']
 
-        if row['groupName'] != lastGroupName:
-            if lastGroupName is not None:
+
+        if row['groupName'] != lastGroupName: # if new filter group 
+            if lastGroupName is not None: # if not the first filter group 
                 statement = '{} ELSE TRUE END'.format(statement)          
 
+            # each filter group
             statement = '{} WHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN CASE'.format(statement, row['groupName'])
 
             lastGroupName = row['groupName']
  
-
+        # each row filter
         statement = '{} WHEN {} == \'{}\' THEN FALSE'.format(statement, row['column'], row['codeValue'])
 
 
-    if len(statement):        
+    if len(statement): # last statement
         statements.append('DROP FUNCTION {};'.format(lastFilter))
 
-        statement = '{} ELSE TRUE END ELSE TRUE END;'.format(statement)
+        statements.append('{} ELSE TRUE END ELSE TRUE END;'.format(statement))
 
-        statements.append(statement)
-
-        statement = 'ALTER TABLE {} SET ROW FILTER {} ON ({})'.format(lastTableName, lastFilter, params);
-
-        statements.append(statement)
+        statements.append('ALTER TABLE {} SET ROW FILTER {} ON ({});'.format(lastTableName, lastFilter, params))
 
 
     return statements
@@ -606,7 +595,6 @@ def run(argv=None):
     args.logger.info("got protection rules")        
 
 
-
     # use main catalog 
     schemaName = args.catalog + '.' + args.schema
 
@@ -658,28 +646,20 @@ def run(argv=None):
     
     args.logger.info("got tables row level filters ")        
 
+    # drop old table rowlevel filters
+    #drop_table_row_level_filters(args=args, table_rowlevel_filters_df=table_rowlevel_filters_df)
+
     # update newest table rowlevel filters
     update_table_rowlevel_filters(args=args, table_rowlevel_filters_df=table_rowlevel_filters_df)
 
     args.logger.info("updated newest table rowlevel filters")        
 
-
-
-
-
-
     # store all table rowlevel filters
-    #sdf=spark.createDataFrame(table_rowlevel_filters_df)
+    sdf=spark.createDataFrame(table_rowlevel_filters_df)
    
-    #sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.row_access_filters")
+    sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.row_access_filters")
 
-    #args.logger.info("saved row level filters")        
-
-
-
-
-
-
+    args.logger.info("saved row level filters")        
 
     args.logger.info("done")     
     
