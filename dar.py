@@ -242,73 +242,73 @@ def get_masking_functions(args=None, protection_rules_df=None):
 
 
 
-    # drop column masking functions no longer active
-    def drop_masking_functions(args=None, masking_functions_df=None):
-        schemaName = args.catalog+'.'+args.schema
+# drop column masking functions no longer active
+def drop_masking_functions(args=None, masking_functions_df=None):
+    schemaName = args.catalog+'.'+args.schema
 
-        try:    
-            statement = 'SHOW USER FUNCTIONS IN {};'.format(args.schema) 
+    try:    
+        statement = 'SHOW USER FUNCTIONS IN {};'.format(args.schema) 
 
-            args.logger.debug('statement:\n%s', statement)
-            
-            before_df = sqlContext.sql(statement).toPandas()  
-            
-            tobedeleted_df = before_df.merge(pd.DataFrame(masking_functions_df['function']), how='left', indicator=True) #.str.lower()
-            
-            tobedeleted_df = tobedeleted_df[tobedeleted_df['_merge'] == 'left_only']
-
-            tobedeleted_df.drop(['_merge'], axis=1, inplace=True)
-
-            for index, row in tobedeleted_df.iterrows():
-                if row[0] == schemaName + '.protect': #reserved
-                    continue
-
-                try:
-                    statement = 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM {}.tag_assignments a, {}.tag_masking_functions b WHERE b.function = \'{}\' AND lower(a.tag) = lower(b.tag);'.format(schemaName, schemaName, row[0]) #lower(b.function)
-
-                    args.logger.debug('statement:\n%s', statement)
-                    
-                    results_df = sqlContext.sql(statement).toPandas()  
-
-                    args.logger.debug('response:\n%s', results_df.shape)
-
-                    results = results_df.shape[0]>0
-
-                    for i, r in results_df.iterrows():
-                        try:
-                            tableName = ".".join(r[:3])
-
-                            columnName = r[3]
-
-                            statement = 'ALTER TABLE {} ALTER COLUMN {} DROP MASK;'.format(tableName, columnName)
-
-                            args.logger.debug('statement:\n%s', statement)
-                    
-                            results_df = sqlContext.sql(statement).toPandas()
-
-                            args.logger.debug('response:\n%s', results_df.shape)
-
-                        except Exception as e:
-                            continue
-
-                    if results:
-                        try:
-                            statement = 'DROP FUNCTION {};'.format(row[0])
-
-                            args.logger.debug('statement:\n%s', statement)
-                    
-                            results_df = sqlContext.sql(statement).toPandas()
-
-                            args.logger.debug('response:\n%s', results_df.shape)
-
-                        except Exception as e:
-                            pass
-
-                except Exception as e:
-                    pass
+        args.logger.debug('statement:\n%s', statement)
         
-        except Exception as e:
-            pass
+        before_df = sqlContext.sql(statement).toPandas()  
+        
+        tobedeleted_df = before_df.merge(pd.DataFrame(masking_functions_df['function']), how='left', indicator=True) #.str.lower()
+        
+        tobedeleted_df = tobedeleted_df[tobedeleted_df['_merge'] == 'left_only']
+
+        tobedeleted_df.drop(['_merge'], axis=1, inplace=True)
+
+        for index, row in tobedeleted_df.iterrows():
+            if row[0] == schemaName + '.protect': #reserved
+                continue
+
+            try:
+                statement = 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM {}.tag_assignments a, {}.tag_masking_functions b WHERE b.function = \'{}\' AND lower(a.tag) = lower(b.tag);'.format(schemaName, schemaName, row[0]) #lower(b.function)
+
+                args.logger.debug('statement:\n%s', statement)
+                
+                results_df = sqlContext.sql(statement).toPandas()  
+
+                args.logger.debug('response:\n%s', results_df.shape)
+
+                results = results_df.shape[0]>0
+
+                for i, r in results_df.iterrows():
+                    try:
+                        tableName = ".".join(r[:3])
+
+                        columnName = r[3]
+
+                        statement = 'ALTER TABLE {} ALTER COLUMN {} DROP MASK;'.format(tableName, columnName)
+
+                        args.logger.debug('statement:\n%s', statement)
+                
+                        results_df = sqlContext.sql(statement).toPandas()
+
+                        args.logger.debug('response:\n%s', results_df.shape)
+
+                    except Exception as e:
+                        continue
+
+                if results:
+                    try:
+                        statement = 'DROP FUNCTION {};'.format(row[0])
+
+                        args.logger.debug('statement:\n%s', statement)
+                
+                        results_df = sqlContext.sql(statement).toPandas()
+
+                        args.logger.debug('response:\n%s', results_df.shape)
+
+                    except Exception as e:
+                        pass
+
+            except Exception as e:
+                pass
+    
+    except Exception as e:
+        pass
 
 
 
