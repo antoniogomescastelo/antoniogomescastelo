@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 
+
 # bearer auth
 class BearerAuth(requests.auth.AuthBase):
     def __init__(self, token):
@@ -241,71 +242,73 @@ def get_masking_functions(args=None, protection_rules_df=None):
 
 
 
-# drop column masking functions no longer active
-def drop_masking_functions(args=None, masking_functions_df=None):
-    schemaName = args.catalog+'.'+args.schema
+    # drop column masking functions no longer active
+    def drop_masking_functions(args=None, masking_functions_df=None):
+        schemaName = args.catalog+'.'+args.schema
 
-    try:    
-        statement = 'SHOW USER FUNCTIONS IN {};'.format(args.schema) 
+        try:    
+            statement = 'SHOW USER FUNCTIONS IN {};'.format(args.schema) 
 
-        args.logger.debug('statement:\n%s', statement)
+            args.logger.debug('statement:\n%s', statement)
+            
+            before_df = sqlContext.sql(statement).toPandas()  
+            
+            tobedeleted_df = before_df.merge(pd.DataFrame(masking_functions_df['function']), how='left', indicator=True) #.str.lower()
+            
+            tobedeleted_df = tobedeleted_df[tobedeleted_df['_merge'] == 'left_only']
+
+            tobedeleted_df.drop(['_merge'], axis=1, inplace=True)
+
+            for index, row in tobedeleted_df.iterrows():
+                if row[0] == schemaName + '.protect': #reserved
+                    continue
+
+                try:
+                    statement = 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM {}.tag_assignments a, {}.tag_masking_functions b WHERE b.function = \'{}\' AND lower(a.tag) = lower(b.tag);'.format(schemaName, schemaName, row[0]) #lower(b.function)
+
+                    args.logger.debug('statement:\n%s', statement)
+                    
+                    results_df = sqlContext.sql(statement).toPandas()  
+
+                    args.logger.debug('response:\n%s', results_df.shape)
+
+                    results = results_df.shape[0]>0
+
+                    for i, r in results_df.iterrows():
+                        try:
+                            tableName = ".".join(r[:3])
+
+                            columnName = r[3]
+
+                            statement = 'ALTER TABLE {} ALTER COLUMN {} DROP MASK;'.format(tableName, columnName)
+
+                            args.logger.debug('statement:\n%s', statement)
+                    
+                            results_df = sqlContext.sql(statement).toPandas()
+
+                            args.logger.debug('response:\n%s', results_df.shape)
+
+                        except Exception as e:
+                            continue
+
+                    if results:
+                        try:
+                            statement = 'DROP FUNCTION {};'.format(row[0])
+
+                            args.logger.debug('statement:\n%s', statement)
+                    
+                            results_df = sqlContext.sql(statement).toPandas()
+
+                            args.logger.debug('response:\n%s', results_df.shape)
+
+                        except Exception as e:
+                            pass
+
+                except Exception as e:
+                    pass
         
-        before_df = sqlContext.sql(statement).toPandas()  
-        
-        tobedeleted_df = before_df.merge(pd.DataFrame(masking_functions_df['function']), how='left', indicator=True) #.str.lower()
-        
-        tobedeleted_df = tobedeleted_df[tobedeleted_df['_merge'] == 'left_only']
-
-        tobedeleted_df.drop(['_merge'], axis=1, inplace=True)
-
-        for index, row in tobedeleted_df.iterrows():
-            if row[0] == schemaName + '.protect': #reserved
-                continue
-
-            try:
-                statement = 'SELECT DISTINCT a.catalog, a.schema, a.table, a.column FROM {}.tag_assignments a, {}.tag_masking_functions b WHERE b.function = \'{}\' AND lower(a.tag) = lower(b.tag)'.format(schemaName, schemaName, row[0]) #lower(b.function)
-
-                args.logger.debug('statement:\n%s', statement)
-                
-                results = sqlContext.sql(statement).toPandas()  
-
-                args.logger.debug('response:\n%s', results.shape)
-
-                for i, r in results.iterrows():
-                    try:
-                        tableName = ".".join(r[:3])
-
-                        columnName = r[3]
-
-                        statement = 'ALTER TABLE {} ALTER COLUMN {} DROP MASK;'.format(tableName, columnName)
-
-                        args.logger.debug('statement:\n%s', statement)
-                
-                        results = sqlContext.sql(statement).toPandas()
-
-                        args.logger.debug('response:\n%s', results.shape)
-
-                    except Exception as e:
-                        continue
-
-                if (results.shape[0]>0):
-                    try:
-                        statement = 'DROP FUNCTION {};'.format(row[0])
-
-                        args.logger.debug('statement:\n%s', statement)
-                
-                        results = sqlContext.sql(statement).toPandas()
-
-                        args.logger.debug('response:\n%s', results.shape)
-
-                    except Exception as e:
-                        pass
-
-            except Exception as e:
-                pass
-    
-    except Exception as e:
-        pass
+        except Exception as e:
+            pass
 
 
 
@@ -351,9 +354,9 @@ def update_masking_functions(args=None, masking_functions_df=None):
         try:
             args.logger.debug('statement:\n%s', statement)
             
-            results = sqlContext.sql(statement).toPandas()
+            results_df = sqlContext.sql(statement).toPandas()
             
-            args.logger.debug('response:\n%s', results.shape)
+            args.logger.debug('response:\n%s', results_df.shape)
         
         except Exception as e:
             args.logger.debug('response:\nFAILED')
@@ -369,11 +372,11 @@ def apply_masking_functions(args=None, masking_functions_df=None):
 
         args.logger.debug('statement:\n%s', statement)
         
-        results = sqlContext.sql(statement).toPandas()  
+        results_df = sqlContext.sql(statement).toPandas()  
 
-        args.logger.debug('response:\n%s', results.shape)
+        args.logger.debug('response:\n%s', results_df.shape)
 
-        for index, row in results.iterrows():
+        for index, row in results_df.iterrows():
             try:
                 tableName = ".".join(row[:3])
 
@@ -383,9 +386,9 @@ def apply_masking_functions(args=None, masking_functions_df=None):
 
                 args.logger.debug('statement:\n%s', statement)
         
-                results = sqlContext.sql(statement).toPandas()
+                results_df = sqlContext.sql(statement).toPandas()
 
-                args.logger.debug('response:\n%s', results.shape)
+                args.logger.debug('response:\n%s', results_df.shape)
 
             except Exception as e:
                 continue
@@ -434,7 +437,7 @@ def get_table_rowlevel_filters(args=None, rowlevel_filters_df=None):
 
     results_df = None
     try:    
-        statement = 'SELECT DISTINCT * FROM {}.tag_assignments a WHERE lower(a.tag) in ({})'.format(schemaName, classifications)
+        statement = 'SELECT DISTINCT * FROM {}.tag_assignments a WHERE lower(a.tag) in ({});'.format(schemaName, classifications)
 
         args.logger.debug('statement:\n%s', statement)
         
@@ -450,6 +453,76 @@ def get_table_rowlevel_filters(args=None, rowlevel_filters_df=None):
         pass
 
     return results_df
+
+
+
+# drop table rowlevel filters no longer active
+def drop_table_rowlevel_filters(args=None, table_rowlevel_filters_df=None):
+    schemaName = args.catalog+'.'+args.schema
+
+    try:    
+        statement = 'SHOW USER FUNCTIONS IN {};'.format(args.schema) 
+
+        args.logger.debug('statement:\n%s', statement)
+        
+        before_df = sqlContext.sql(statement).toPandas()  
+        
+        tobedeleted_df = before_df.merge(pd.DataFrame(table_rowlevel_filters_df['filter']), how='left', indicator=True, left_on=['function'], right_on = ['filter']) #.str.lower()
+
+        tobedeleted_df = tobedeleted_df[tobedeleted_df['_merge'] == 'left_only']
+
+        tobedeleted_df.drop(['_merge'], axis=1, inplace=True)
+        
+        for index, row in tobedeleted_df.iterrows():
+            if row[0] == schemaName + '.protect': #reserved
+                continue
+
+            try:
+                statement = 'SELECT DISTINCT a.catalog, a.schema, a.table FROM {}.row_access_filters a WHERE a.filter = \'{}\';'.format(schemaName, row[0]) 
+
+                args.logger.debug('statement:\n%s', statement)
+                
+                results_df = sqlContext.sql(statement).toPandas()  
+
+                args.logger.debug('response:\n%s', results_df.shape)
+
+                results = results_df.shape[0]>0
+
+                for i, r in results_df.iterrows():
+                    try:
+                        tableName = ".".join(r[:3])
+
+                        statement = 'ALTER TABLE {} DROP ROW FILTER;'.format(tableName)
+
+                        args.logger.debug('statement:\n%s', statement)
+                
+                        results_df = sqlContext.sql(statement).toPandas()
+
+                        args.logger.debug('response:\n%s', results_df.shape)
+
+                    except Exception as e:
+                        continue
+
+                if results:
+                    try:
+                        statement = 'DROP FUNCTION {};'.format(row[0])
+
+                        args.logger.debug('statement:\n%s', statement)
+                
+                        results_df = sqlContext.sql(statement).toPandas()
+
+                        args.logger.debug('response:\n%s', results_df.shape)
+
+                    except Exception as e:
+                        pass
+
+            except Exception as e:
+                pass
+    
+    except Exception as e:
+        print(e)
+        pass
+
 
 
 
@@ -644,10 +717,12 @@ def run(argv=None):
 
     table_rowlevel_filters_df = pd.merge(table_rowlevel_filters_df, rowlevel_filters_df,  how='left', left_on=table_rowlevel_filters_df['tag'].str.lower(), right_on = rowlevel_filters_df['dataClassification'].str.lower())
     
-    args.logger.info("got tables row level filters ")        
+    args.logger.info("got table row level filters ")        
 
     # drop old table rowlevel filters
-    #drop_table_row_level_filters(args=args, table_rowlevel_filters_df=table_rowlevel_filters_df)
+    drop_table_rowlevel_filters(args=args, table_rowlevel_filters_df=table_rowlevel_filters_df)
+
+    args.logger.info("dropped old table row level filters ")        
 
     # update newest table rowlevel filters
     update_table_rowlevel_filters(args=args, table_rowlevel_filters_df=table_rowlevel_filters_df)
@@ -655,6 +730,8 @@ def run(argv=None):
     args.logger.info("updated newest table rowlevel filters")        
 
     # store all table rowlevel filters
+    table_rowlevel_filters_df.drop(columns=['key_0'], inplace=True)
+
     sdf=spark.createDataFrame(table_rowlevel_filters_df)
    
     sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.row_access_filters")
@@ -663,5 +740,5 @@ def run(argv=None):
 
     args.logger.info("done")     
     
-    return protection_rules_df, masking_functions_df, rowlevel_filters_df, table_rowlevel_filters_df
+    return protection_rules_df, masking_functions_df, table_rowlevel_filters_df
 
