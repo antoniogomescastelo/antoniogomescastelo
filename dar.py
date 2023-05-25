@@ -543,7 +543,7 @@ def get_create_filters_commands(args=None, table_rowlevel_filters_df=None):
             if lastFilter is not None: # if not first filter
                 statements.append('DROP FUNCTION {};'.format(lastFilter))
 
-                statement = '{} ELSE TRUE END ELSE TRUE END;'.format(statement)
+                statement = '{} ELSE TRUE END ELSE FALSE END;'.format(statement)
 
                 statements.append(statement)
 
@@ -579,7 +579,7 @@ def get_create_filters_commands(args=None, table_rowlevel_filters_df=None):
     if len(statement): # last statement
         statements.append('DROP FUNCTION {};'.format(lastFilter))
 
-        statements.append('{} ELSE TRUE END ELSE TRUE END;'.format(statement))
+        statements.append('{} ELSE TRUE END ELSE FALSE END;'.format(statement))
 
         statements.append('ALTER TABLE {} SET ROW FILTER {} ON ({});'.format(lastTableName, lastFilter, params))
 
