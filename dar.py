@@ -196,6 +196,10 @@ def get_masking_rules_maskings(args=None, protection_rules_df=None):
 
 # get standards and data access rules 
 def get_masking_rules(args=None, policies=None):
+    protection_rules_df = pd.DataFrame(policies)
+
+    protection_rules_df = protection_rules_df[protection_rules_df['status'] != 'DELETE_PENDING']
+
     protection_rules_df = pd.DataFrame(policies).explode('groups').explode('assets').explode('maskings')
 
     protection_rules_df = get_masking_rules_groups(args, protection_rules_df)
