@@ -121,7 +121,7 @@ def get_assettype_name(args=None, type_uuid=None, asset_uuid=None):
 def get_policies(args=None):
     policies = {}
 
-    allItems = ['type', 'id', 'name', 'groups', 'asset', 'assets', 'masking', 'maskings', 'grantAccess', 'rowFilters']
+    allItems = ['type', 'id', 'name', 'groups', 'asset', 'assets', 'masking', 'maskings', 'grantAccess', 'rowFilters', 'status']
 
     try:
         response = args.session.get(args.url + '/rest/protect/v1/policies')
@@ -200,16 +200,17 @@ def get_masking_rules(args=None, policies=None):
 
     protection_rules_df = protection_rules_df[protection_rules_df['status'] != 'DELETE_PENDING']
 
-    protection_rules_df = pd.DataFrame(policies).explode('groups').explode('assets').explode('maskings')
-
+    
+    protection_rules_df = protection_rules_df.explode('groups').explode('assets').explode('maskings')
+    
     protection_rules_df = get_masking_rules_groups(args, protection_rules_df)
-
+    
     protection_rules_df = get_masking_rules_assets(args, protection_rules_df)
-
+    
     protection_rules_df = get_masking_rules_maskings(args, protection_rules_df)
-
+    
     protection_rules_df.drop(['id', 'type', 'name'], axis=1, inplace=True)
-
+    
     return protection_rules_df
 
 
@@ -255,7 +256,7 @@ def drop_masking_functions(args=None, masking_functions_df=None):
 
         args.logger.debug('statement:\n%s', statement)
         
-        before_df = sqlContext.sql(statement).toPandas()  
+        before_df = spark.sql(statement).toPandas()  
         
         tobedeleted_df = before_df.merge(pd.DataFrame(masking_functions_df['function']), how='left', indicator=True) #.str.lower()
         
@@ -272,7 +273,7 @@ def drop_masking_functions(args=None, masking_functions_df=None):
 
                 args.logger.debug('statement:\n%s', statement)
                 
-                results_df = sqlContext.sql(statement).toPandas()  
+                results_df = spark.sql(statement).toPandas()  
 
                 args.logger.debug('response:\n%s', results_df.shape)
 
@@ -288,7 +289,7 @@ def drop_masking_functions(args=None, masking_functions_df=None):
 
                         args.logger.debug('statement:\n%s', statement)
                 
-                        results_df = sqlContext.sql(statement).toPandas()
+                        results_df = spark.sql(statement).toPandas()
 
                         args.logger.debug('response:\n%s', results_df.shape)
 
@@ -301,7 +302,7 @@ def drop_masking_functions(args=None, masking_functions_df=None):
 
                         args.logger.debug('statement:\n%s', statement)
                 
-                        results_df = sqlContext.sql(statement).toPandas()
+                        results_df = spark.sql(statement).toPandas()
 
                         args.logger.debug('response:\n%s', results_df.shape)
 
@@ -358,7 +359,7 @@ def update_masking_functions(args=None, masking_functions_df=None):
         try:
             args.logger.debug('statement:\n%s', statement)
             
-            results_df = sqlContext.sql(statement).toPandas()
+            results_df = spark.sql(statement).toPandas()
             
             args.logger.debug('response:\n%s', results_df.shape)
         
@@ -376,7 +377,7 @@ def apply_masking_functions(args=None, masking_functions_df=None):
 
         args.logger.debug('statement:\n%s', statement)
         
-        results_df = sqlContext.sql(statement).toPandas()  
+        results_df = spark.sql(statement).toPandas()  
 
         args.logger.debug('response:\n%s', results_df.shape)
 
@@ -390,7 +391,7 @@ def apply_masking_functions(args=None, masking_functions_df=None):
 
                 args.logger.debug('statement:\n%s', statement)
         
-                results_df = sqlContext.sql(statement).toPandas()
+                results_df = spark.sql(statement).toPandas()
 
                 args.logger.debug('response:\n%s', results_df.shape)
 
@@ -445,7 +446,7 @@ def get_table_rowlevel_filters(args=None, rowlevel_filters_df=None):
 
         args.logger.debug('statement:\n%s', statement)
         
-        results_df = sqlContext.sql(statement).toPandas()  
+        results_df = spark.sql(statement).toPandas()  
 
         args.logger.debug('response:\n%s', results_df.shape)
 
@@ -469,7 +470,7 @@ def drop_table_rowlevel_filters(args=None, table_rowlevel_filters_df=None):
 
         args.logger.debug('statement:\n%s', statement)
         
-        before_df = sqlContext.sql(statement).toPandas()  
+        before_df = spark.sql(statement).toPandas()  
         
         tobedeleted_df = before_df.merge(pd.DataFrame(table_rowlevel_filters_df['filter']), how='left', indicator=True, left_on=['function'], right_on = ['filter']) #.str.lower()
 
@@ -486,7 +487,7 @@ def drop_table_rowlevel_filters(args=None, table_rowlevel_filters_df=None):
 
                 args.logger.debug('statement:\n%s', statement)
                 
-                results_df = sqlContext.sql(statement).toPandas()  
+                results_df = spark.sql(statement).toPandas()  
 
                 args.logger.debug('response:\n%s', results_df.shape)
 
@@ -500,7 +501,7 @@ def drop_table_rowlevel_filters(args=None, table_rowlevel_filters_df=None):
 
                         args.logger.debug('statement:\n%s', statement)
                 
-                        results_df = sqlContext.sql(statement).toPandas()
+                        results_df = spark.sql(statement).toPandas()
 
                         args.logger.debug('response:\n%s', results_df.shape)
 
@@ -513,7 +514,7 @@ def drop_table_rowlevel_filters(args=None, table_rowlevel_filters_df=None):
 
                         args.logger.debug('statement:\n%s', statement)
                 
-                        results_df = sqlContext.sql(statement).toPandas()
+                        results_df = spark.sql(statement).toPandas()
 
                         args.logger.debug('response:\n%s', results_df.shape)
 
@@ -547,7 +548,7 @@ def get_create_filters_commands(args=None, table_rowlevel_filters_df=None):
             if lastFilter is not None: # if not first filter
                 statements.append('DROP FUNCTION {};'.format(lastFilter))
 
-                statement = '{} ELSE TRUE END ELSE FALSE END;'.format(statement)
+                statement = '{} ELSE FALSE END ELSE FALSE END;'.format(statement)
 
                 statements.append(statement)
 
@@ -569,7 +570,7 @@ def get_create_filters_commands(args=None, table_rowlevel_filters_df=None):
 
         if row['groupName'] != lastGroupName: # if new filter group 
             if lastGroupName is not None: # if not the first filter group 
-                statement = '{} ELSE TRUE END'.format(statement)          
+                statement = '{} ELSE FALSE END'.format(statement)          
 
             # each filter group
             statement = '{} WHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN CASE'.format(statement, row['groupName'])
@@ -577,16 +578,17 @@ def get_create_filters_commands(args=None, table_rowlevel_filters_df=None):
             lastGroupName = row['groupName']
  
         # each row filter
-        statement = '{} WHEN {} == \'{}\' THEN FALSE'.format(statement, row['column'], row['codeValue'])
-
+        if row['action'] == 'HIDE':
+            statement = '{} WHEN {} == \'{}\' THEN FALSE'.format(statement, row['column'], row['codeValue'])
+        else:
+            statement = '{} WHEN {} == \'{}\' THEN TRUE'.format(statement, row['column'], row['codeValue'])
 
     if len(statement): # last statement
         statements.append('DROP FUNCTION {};'.format(lastFilter))
 
         statements.append('{} ELSE TRUE END ELSE FALSE END;'.format(statement))
 
-        statements.append('ALTER TABLE {} SET ROW FILTER {} ON ({});'.format(lastTableName, lastFilter, params))
-
+        statements.append('ALTER TABLE {} SET ROW FILTER {} ON ({});'.format(lastTableName, lastFilter, params.replace('STRING','')))
 
     return statements
 
@@ -598,7 +600,7 @@ def update_table_rowlevel_filters(args=None, table_rowlevel_filters_df=None):
         try:
             args.logger.debug('statement:\n%s', statement)
             
-            results_df = sqlContext.sql(statement).toPandas()
+            results_df = spark.sql(statement).toPandas()
             
             args.logger.debug('response:\n%s', results_df.shape)
         
@@ -671,11 +673,10 @@ def run(argv=None):
 
     args.logger.info("got protection rules")        
 
-
     # use main catalog 
     schemaName = args.catalog + '.' + args.schema
 
-    sqlContext.sql("use catalog {};".format(args.catalog))  
+    spark.sql("use catalog {};".format(args.catalog))  
 
     # get masking functions
     masking_functions_df = get_masking_functions(args=args, protection_rules_df=protection_rules_df)
@@ -705,7 +706,7 @@ def run(argv=None):
     args.logger.info("set newest masking functions")        
 
     # drop duplicate assignments 
-    sdf = sqlContext.sql("SELECT DISTINCT * FROM {}.tag_assignments".format(schemaName)) 
+    sdf = spark.sql("SELECT DISTINCT * FROM {}.tag_assignments".format(schemaName)) 
 
     sdf.write.mode("overwrite").saveAsTable("main.sbi_template_unitycatalog.tag_assignments")
 
