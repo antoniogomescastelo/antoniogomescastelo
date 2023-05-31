@@ -541,10 +541,10 @@ def get_create_filters_commands(args=None, table_rowlevel_filters_df=None):
     statements = []
 
     lastFilter = None
-    lastGroupName = None
+    lastColumnNameValue = None
     lastTableName = None
     
-    for index, row in table_rowlevel_filters_df.sort_values(by=['filter', 'groupName', 'column']).iterrows():
+    for index, row in table_rowlevel_filters_df.sort_values(by=['filter', 'column', 'codeValue', 'groupName']).iterrows():
         if row['filter'] != lastFilter: # if new filter
             if lastFilter is not None: # if not first filter
                 statements.append('DROP FUNCTION {};'.format(lastFilter))
@@ -562,32 +562,34 @@ def get_create_filters_commands(args=None, table_rowlevel_filters_df=None):
 
             statement = 'CREATE OR REPLACE FUNCTION {} ({}) RETURNS BOOLEAN RETURN CASE'.format(row['filter'], params)
 
-            lastGroupName = None
+            lastColumnNameValue = None
 
             lastFilter = row['filter']
 
             lastTableName = row['catalog'] + '.' + row['schema'] + '.' + row['table']
 
 
-        if row['groupName'] != lastGroupName: # if new filter group 
-            if lastGroupName is not None: # if not the first filter group 
+        if row['column']+row['codeValue'] != lastColumnNameValue: # if new filter column 
+            if lastColumnNameValue is not None: # if not the first filter column 
                 statement = '{} ELSE FALSE END'.format(statement)          
 
             # each filter group
-            statement = '{} WHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN CASE'.format(statement, row['groupName'])
+            statement = '{} WHEN {} == \'{}\' THEN CASE'.format(statement, row['column'], row['codeValue'])
 
-            lastGroupName = row['groupName']
- 
+            lastColumnNameValue = row['column']+row['codeValue']
+
+
         # each row filter
         if row['action'] == 'HIDE':
-            statement = '{} WHEN {} == \'{}\' THEN FALSE'.format(statement, row['column'], row['codeValue'])
+            statement = '{} WHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN FALSE'.format(statement, row['groupName'])
+
         else:
-            statement = '{} WHEN {} == \'{}\' THEN TRUE'.format(statement, row['column'], row['codeValue'])
+            statement = '{} WHEN IS_ACCOUNT_GROUP_MEMBER(\'{}\') THEN TRUE'.format(statement, row['groupName'])
 
     if len(statement): # last statement
         statements.append('DROP FUNCTION {};'.format(lastFilter))
 
-        statements.append('{} ELSE TRUE END ELSE FALSE END;'.format(statement))
+        statements.append('{} ELSE FALSE END ELSE FALSE END;'.format(statement))
 
         statements.append('ALTER TABLE {} SET ROW FILTER {} ON ({});'.format(lastTableName, lastFilter, params.replace('STRING','')))
 
