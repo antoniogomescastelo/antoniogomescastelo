@@ -200,6 +200,7 @@ def get_masking_rules(args=None, policies=None):
 
     protection_rules_df = protection_rules_df[protection_rules_df['status'] != 'DELETE_PENDING']
 
+    protection_rules_df.drop(['status'], axis=1, inplace=True)
     
     protection_rules_df = protection_rules_df.explode('groups').explode('assets').explode('maskings')
     
