@@ -224,7 +224,7 @@ def get_masking_functions_maskings(args=None, masking_functions_df=None):
 
     masking_functions_df['maskingAssetTypeName'] = masking_functions_df['maskingAssetTypeName'].map({'Classification':'DataConcept', 'Data Category':'DataCategory'})
 
-    masking_functions_df = masking_functions_df.assign(tag=lambda x: x['maskingAssetTypeName'] + ':' + x['maskingAssetName'])
+    masking_functions_df = masking_functions_df.assign(tag=lambda x: x['maskingAssetTypeName'] + '|' + x['maskingAssetName'])
 
     masking_functions_df = masking_functions_df.assign(function=lambda x: schemaName + '.' + x['maskingAssetTypeName'].str.lower() + '_' + x['maskingAssetName'].str.lower())
     
