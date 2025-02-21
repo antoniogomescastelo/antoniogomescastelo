@@ -1,21 +1,82 @@
-
 version: 2
 
 models:
-    - name: my_first_dbt_model
-      description: "A starter dbt model"
-      columns:
-          - name: id
-            description: "The primary key for this table"
-            tests:
-                - unique
-                - not_null
+  - name: my_first_dbt_model
+    description: "A starter dbt model"
+    columns:
+      - name: id
+        description: "The primary key for this table"
+        tests:
+          - unique
+          - not_null
 
-    - name: my_second_dbt_model
-      description: "A starter dbt model"
-      columns:
-          - name: id
-            description: "The primary key for this table"
-            tests:
-                - unique
-                - not_null
+          - elementary.column_anomalies:
+              column_anomalies: # Optional, A list of column monitors for anomaly detection. by default all monitors except for `sum` are executed.
+                - null_count
+                - null_percent
+                - min_length
+                - max_length
+                - average_length
+                - missing_count
+                - missing_percent
+                - min
+                - max
+                - average
+                - zero_count
+                - zero_percent
+                - standard_deviation
+                - variance
+                - sum
+              anomaly_sensitivity: 3 # Optional, The sensitivity level for anomaly detection.
+              anomaly_direction: both # Optional, The direction of anomalies to detect.
+              detection_period: # Optional, The period for anomaly detection.
+                period: day
+                count: 2
+              training_period: # Optional, The period for model training.
+                period: day
+                count: 14
+              time_bucket: # Optional, The period for time bucketing.
+                period: day
+                count: 1
+              timestamp_column: created_at # Optional, The timestamp column to use in order to split the data into time buckets.
+              config:
+                severity: error
+  - name: my_second_dbt_model
+    description: "A starter dbt model"
+    columns:
+      - name: id
+        description: "The primary key for this table"
+        tests:
+          - unique
+          - not_null
+          - elementary.column_anomalies:
+              column_anomalies: # Optional, A list of column monitors for anomaly detection. by default all monitors except for `sum` are executed.
+                - null_count
+                - null_percent
+                - min_length
+                - max_length
+                - average_length
+                - missing_count
+                - missing_percent
+                - min
+                - max
+                - average
+                - zero_count
+                - zero_percent
+                - standard_deviation
+                - variance
+                - sum
+              anomaly_sensitivity: 3 # Optional, The sensitivity level for anomaly detection.
+              anomaly_direction: both # Optional, The direction of anomalies to detect.
+              detection_period: # Optional, The period for anomaly detection.
+                period: day
+                count: 2
+              training_period: # Optional, The period for model training.
+                period: day
+                count: 14
+              time_bucket: # Optional, The period for time bucketing.
+                period: day
+                count: 1
+              timestamp_column: created_at # Optional, The timestamp column to use in order to split the data into time buckets.
+              config:
+                severity: error
