@@ -35,10 +35,6 @@ models:
               training_period: # Optional, The period for model training.
                 period: day
                 count: 14
-              time_bucket: # Optional, The period for time bucketing.
-                period: day
-                count: 1
-              timestamp_column: created_at # Optional, The timestamp column to use in order to split the data into time buckets.
               config:
                 severity: error
   - name: my_second_dbt_model
@@ -74,9 +70,5 @@ models:
               training_period: # Optional, The period for model training.
                 period: day
                 count: 14
-              time_bucket: # Optional, The period for time bucketing.
-                period: day
-                count: 1
-              timestamp_column: created_at # Optional, The timestamp column to use in order to split the data into time buckets.
               config:
                 severity: error
